@@ -187,6 +187,22 @@ python -m skunk_pc.main
 
 Nunca habilites `SKUNK_DEV_AUTH_BYPASS` en el servidor.
 
+## Actualización desde GitHub
+
+Después de instalar la aplicación, las versiones nuevas se aplican desde el
+repositorio con:
+
+```bash
+cd /home/bodega/Skunk-PC-Next
+./update.sh
+```
+
+El actualizador exige la rama `main` sin cambios locales, descarga únicamente
+un avance rápido desde `origin/main`, crea un respaldo en
+`/var/backups/skunk-pc`, actualiza código, dependencias y unidades, reinicia los
+tres servicios y valida el panel en el puerto configurado. Si la validación
+falla, restaura la aplicación y las unidades anteriores.
+
 ## Desinstalación segura
 
 ```bash
