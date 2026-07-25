@@ -7,6 +7,8 @@ import re
 import shlex
 import socket
 import subprocess
+import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
@@ -24,6 +26,10 @@ STATE_LINE_RE = re.compile(
     r"^(?:printer|la impresora)\s+(\S+)\s+(.+)$",
     re.IGNORECASE,
 )
+USB_CACHE_SECONDS = 10.0
+_usb_cache_lock = threading.Lock()
+_usb_cache_expires_at = 0.0
+_usb_cache: list[UsbPrinter] = []
 
 
 class CupsError(RuntimeError):
@@ -93,34 +99,54 @@ def parse_device_uri(uri: str) -> UsbPrinter:
     )
 
 
-def discover_usb_printers(*, allow_admin_helper: bool = True) -> list[UsbPrinter]:
-    result = run_command(["lpinfo", "-v"])
-    if result.returncode != 0:
-        if not allow_admin_helper:
-            require_success(result, "No se pudieron consultar dispositivos CUPS")
-        response = run_admin_helper("devices")
-        try:
-            items = json.loads(response)
-            if not isinstance(items, list):
-                raise ValueError
-            return [
-                UsbPrinter(
-                    uri=str(item["uri"]),
-                    manufacturer=str(item["manufacturer"]),
-                    model=str(item["model"]),
-                    serial=str(item["serial"]),
-                    is_zebra=bool(item["is_zebra"]),
-                )
-                for item in items
-                if isinstance(item, dict)
+def discover_usb_printers(
+    *,
+    allow_admin_helper: bool = True,
+    refresh: bool = False,
+) -> list[UsbPrinter]:
+    global _usb_cache, _usb_cache_expires_at
+
+    now = time.monotonic()
+    if not refresh and now < _usb_cache_expires_at:
+        return list(_usb_cache)
+
+    with _usb_cache_lock:
+        now = time.monotonic()
+        if not refresh and now < _usb_cache_expires_at:
+            return list(_usb_cache)
+
+        result = run_command(["lpinfo", "-v"])
+        if result.returncode != 0:
+            if not allow_admin_helper:
+                require_success(result, "No se pudieron consultar dispositivos CUPS")
+            response = run_admin_helper("devices")
+            try:
+                items = json.loads(response)
+                if not isinstance(items, list):
+                    raise ValueError
+                devices = [
+                    UsbPrinter(
+                        uri=str(item["uri"]),
+                        manufacturer=str(item["manufacturer"]),
+                        model=str(item["model"]),
+                        serial=str(item["serial"]),
+                        is_zebra=bool(item["is_zebra"]),
+                    )
+                    for item in items
+                    if isinstance(item, dict)
+                ]
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                raise CupsError("Respuesta de dispositivos inválida") from exc
+        else:
+            devices = [
+                parse_device_uri(uri)
+                for uri in parse_lpinfo_devices(result.stdout)
+                if uri.startswith("usb://")
             ]
-        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            raise CupsError("Respuesta de dispositivos inválida") from exc
-    return [
-        parse_device_uri(uri)
-        for uri in parse_lpinfo_devices(result.stdout)
-        if uri.startswith("usb://")
-    ]
+
+        _usb_cache = devices
+        _usb_cache_expires_at = time.monotonic() + USB_CACHE_SECONDS
+        return list(devices)
 
 
 def _parse_options(output: str) -> dict[str, str]:

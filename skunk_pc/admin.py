@@ -31,7 +31,10 @@ def _validate_uri(uri: str) -> str:
     if uri.startswith("usb://"):
         available = {
             device.uri
-            for device in discover_usb_printers(allow_admin_helper=False)
+            for device in discover_usb_printers(
+                allow_admin_helper=False,
+                refresh=True,
+            )
             if device.is_zebra
         }
         if uri not in available:

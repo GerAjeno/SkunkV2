@@ -33,6 +33,7 @@ def test_parse_zebra_uri() -> None:
 
 
 def test_discovery_uses_admin_helper_when_cups_forbids_lpinfo(monkeypatch) -> None:
+    monkeypatch.setattr(cups, "_usb_cache_expires_at", 0.0)
     monkeypatch.setattr(
         cups,
         "run_command",
@@ -55,6 +56,28 @@ def test_discovery_uses_admin_helper_when_cups_forbids_lpinfo(monkeypatch) -> No
     assert len(devices) == 1
     assert devices[0].model == "TLP2844"
     assert devices[0].serial == "41J114402245"
+
+
+def test_discovery_reuses_recent_result(monkeypatch) -> None:
+    calls = 0
+
+    def fake_run_command(_args):
+        nonlocal calls
+        calls += 1
+        return CommandResult(
+            0,
+            "direct usb://Zebra/TLP2844?serial=41J114402245",
+            "",
+        )
+
+    monkeypatch.setattr(cups, "_usb_cache_expires_at", 0.0)
+    monkeypatch.setattr(cups, "run_command", fake_run_command)
+
+    first = discover_usb_printers()
+    second = discover_usb_printers()
+
+    assert first == second
+    assert calls == 1
 
 
 def test_validate_printer_name() -> None:
