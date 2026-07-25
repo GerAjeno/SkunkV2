@@ -191,9 +191,33 @@ $("#printer-grid")?.addEventListener("click", async (event) => {
   }
 });
 
+function closeAddPrinterDialog() {
+  const dialog = $("#add-printer-dialog");
+  const form = $("#add-printer-form");
+  form?.reset();
+  const message = $("#add-message");
+  if (message) {
+    message.textContent = "";
+    message.className = "form-message";
+  }
+  if (dialog?.open) dialog.close();
+}
+
+document.querySelectorAll("[data-close-add-printer]").forEach((button) => {
+  button.addEventListener("click", closeAddPrinterDialog);
+});
+
+$("#add-printer-dialog")?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeAddPrinterDialog();
+});
+
 $("#add-printer-button")?.addEventListener("click", async () => {
   const dialog = $("#add-printer-dialog");
   const select = $("#device-select");
+  $("#add-printer-form").reset();
+  $("#add-message").textContent = "";
+  $("#add-message").className = "form-message";
   select.innerHTML = '<option value="">Buscando dispositivos…</option>';
   dialog.showModal();
   try {
@@ -215,10 +239,6 @@ $("#add-printer-button")?.addEventListener("click", async () => {
 
 $("#add-printer-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (event.submitter?.value === "cancel") {
-    $("#add-printer-dialog").close();
-    return;
-  }
   const form = new FormData(event.currentTarget);
   const message = $("#add-message");
   try {
@@ -228,8 +248,7 @@ $("#add-printer-form")?.addEventListener("submit", async (event) => {
       body: JSON.stringify(Object.fromEntries(form))
     });
     toast(data.message || "Impresora creada");
-    $("#add-printer-dialog").close();
-    event.currentTarget.reset();
+    closeAddPrinterDialog();
     await refresh();
   } catch (error) {
     message.textContent = error.message;

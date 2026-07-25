@@ -145,7 +145,7 @@
           <p class="eyebrow">NUEVA COLA</p>
           <h2>Añadir Zebra</h2>
         </div>
-        <button class="icon-button" value="cancel" aria-label="Cerrar">×</button>
+        <button class="icon-button" type="button" data-close-add-printer aria-label="Cerrar">×</button>
       </div>
       <label>
         Nombre visible
@@ -163,8 +163,8 @@
         </select>
       </label>
       <div class="dialog-actions">
-        <button class="btn btn-quiet" value="cancel">Cancelar</button>
-        <button class="btn btn-primary" value="default">Crear impresora</button>
+        <button class="btn btn-quiet" type="button" data-close-add-printer>Cancelar</button>
+        <button class="btn btn-primary" type="submit">Crear impresora</button>
       </div>
       <div id="add-message" class="form-message"></div>
     </form>
@@ -174,4 +174,3 @@
   <script src="/static/app.js" defer></script>
 </body>
 </html>
-
