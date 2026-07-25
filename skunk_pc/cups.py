@@ -334,15 +334,19 @@ def send_test(printer_name: str) -> None:
         payload = (
             "\nN\nq812\nQ1218,24\n"
             'A40,40,0,4,1,1,N,"SKUNK PC - PRUEBA EPL2"\n'
-            'A40,105,0,3,1,1,N,"Etiqueta 4x6 - 203 DPI"\n'
-            'B40,180,0,1,2,4,100,B,"SKUNK-PC-OK"\nP1\n'
+            'A40,105,0,3,1,1,N,"ORIGEN: PAGINA WEB"\n'
+            f'A40,155,0,3,1,1,N,"IMPRESORA: {printer.name}"\n'
+            'A40,205,0,3,1,1,N,"Etiqueta 4x6 - 203 DPI"\n'
+            'B40,280,0,1,2,4,100,B,"SKUNK-PC-OK"\nP1\n'
         )
     else:
         payload = (
             "^XA^PW812^LL1218"
             "^FO40,40^A0N,42,42^FDSKUNK PC - PRUEBA ZPL^FS"
-            "^FO40,105^A0N,30,30^FDEtiqueta 4x6 - 203 DPI^FS"
-            "^FO40,180^BY3^BCN,100,Y,N,N^FDSKUNK-PC-OK^FS^XZ"
+            "^FO40,105^A0N,30,30^FDORIGEN: PAGINA WEB^FS"
+            f"^FO40,155^A0N,30,30^FDIMPRESORA: {printer.name}^FS"
+            "^FO40,205^A0N,30,30^FDEtiqueta 4x6 - 203 DPI^FS"
+            "^FO40,280^BY3^BCN,100,Y,N,N^FDSKUNK-PC-OK^FS^XZ"
         )
     send_raw(printer_name, payload)
 

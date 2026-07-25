@@ -7,8 +7,10 @@ from skunk_pc.cups import (
     discover_usb_printers,
     parse_device_uri,
     parse_lpinfo_devices,
+    send_test,
     validate_printer_name,
 )
+from skunk_pc.schemas import Printer
 
 
 def test_parse_lpinfo_devices() -> None:
@@ -82,6 +84,54 @@ def test_discovery_reuses_recent_result(monkeypatch) -> None:
 
 def test_validate_printer_name() -> None:
     assert validate_printer_name("Planchetta_1") == "Planchetta_1"
+
+
+def test_web_test_label_contains_origin_and_epl2_printer_name(monkeypatch) -> None:
+    printer = Printer(
+        name="Zebra_01",
+        uri="usb://Zebra/TLP2844?serial=ABC",
+        description="Zebra_01",
+        make_model="Zebra EPL2",
+        state="idle",
+        state_message="idle",
+        connected=True,
+        is_zebra=True,
+        language="epl2",
+        dpi=203,
+        page_size="w288h432",
+    )
+    payloads = []
+    monkeypatch.setattr(cups, "get_printer", lambda _name: printer)
+    monkeypatch.setattr(cups, "send_raw", lambda _name, payload: payloads.append(payload))
+
+    send_test("Zebra_01")
+
+    assert "ORIGEN: PAGINA WEB" in payloads[0]
+    assert "IMPRESORA: Zebra_01" in payloads[0]
+
+
+def test_web_test_label_contains_origin_and_zpl_printer_name(monkeypatch) -> None:
+    printer = Printer(
+        name="Zebra_02",
+        uri="socket://10.1.0.90:9100",
+        description="Zebra_02",
+        make_model="Zebra ZPL",
+        state="idle",
+        state_message="idle",
+        connected=True,
+        is_zebra=True,
+        language="zpl",
+        dpi=203,
+        page_size="w288h432",
+    )
+    payloads = []
+    monkeypatch.setattr(cups, "get_printer", lambda _name: printer)
+    monkeypatch.setattr(cups, "send_raw", lambda _name, payload: payloads.append(payload))
+
+    send_test("Zebra_02")
+
+    assert "ORIGEN: PAGINA WEB" in payloads[0]
+    assert "IMPRESORA: Zebra_02" in payloads[0]
 
 
 def test_ppd_identifies_broken_zebra_queue(tmp_path: Path) -> None:
