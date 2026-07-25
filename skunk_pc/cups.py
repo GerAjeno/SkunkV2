@@ -93,9 +93,29 @@ def parse_device_uri(uri: str) -> UsbPrinter:
     )
 
 
-def discover_usb_printers() -> list[UsbPrinter]:
+def discover_usb_printers(*, allow_admin_helper: bool = True) -> list[UsbPrinter]:
     result = run_command(["lpinfo", "-v"])
-    require_success(result, "No se pudieron consultar dispositivos CUPS")
+    if result.returncode != 0:
+        if not allow_admin_helper:
+            require_success(result, "No se pudieron consultar dispositivos CUPS")
+        response = run_admin_helper("devices")
+        try:
+            items = json.loads(response)
+            if not isinstance(items, list):
+                raise ValueError
+            return [
+                UsbPrinter(
+                    uri=str(item["uri"]),
+                    manufacturer=str(item["manufacturer"]),
+                    model=str(item["model"]),
+                    serial=str(item["serial"]),
+                    is_zebra=bool(item["is_zebra"]),
+                )
+                for item in items
+                if isinstance(item, dict)
+            ]
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise CupsError("Respuesta de dispositivos inválida") from exc
     return [
         parse_device_uri(uri)
         for uri in parse_lpinfo_devices(result.stdout)
@@ -174,8 +194,7 @@ def _states() -> dict[str, tuple[str, str]]:
 
 def list_printers(*, include_non_zebra: bool = False) -> list[Printer]:
     configured = _configured_devices()
-    physical_devices = parse_lpinfo_devices(run_command(["lpinfo", "-v"]).stdout)
-    physical_usb = [uri for uri in physical_devices if uri.startswith("usb://")]
+    physical_usb = [device.uri for device in discover_usb_printers()]
     states = _states()
     printers: list[Printer] = []
 
@@ -308,7 +327,7 @@ def calibrate(printer_name: str) -> None:
 
 
 def run_admin_helper(action: str, *arguments: str) -> str:
-    allowed_actions = {"add", "repair", "delete", "configure", "enable"}
+    allowed_actions = {"devices", "add", "repair", "delete", "configure", "enable"}
     if action not in allowed_actions:
         raise CupsError("Acción administrativa inválida")
     request = json.dumps({"action": action, "arguments": list(arguments)}).encode("utf-8")

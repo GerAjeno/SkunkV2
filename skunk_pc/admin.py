@@ -29,7 +29,11 @@ def _validate_uri(uri: str) -> str:
     if len(uri) > 500:
         raise CupsError("URI demasiado larga")
     if uri.startswith("usb://"):
-        available = {device.uri for device in discover_usb_printers() if device.is_zebra}
+        available = {
+            device.uri
+            for device in discover_usb_printers(allow_admin_helper=False)
+            if device.is_zebra
+        }
         if uri not in available:
             raise CupsError("La URI no corresponde a una Zebra USB conectada")
         return uri
@@ -81,6 +85,11 @@ def _configure(name: str, uri: str, language: str) -> None:
 
 
 def dispatch(action: str, arguments: list[str]) -> str:
+    if action == "devices":
+        if arguments:
+            raise CupsError("La consulta de dispositivos no acepta parámetros")
+        devices = discover_usb_printers(allow_admin_helper=False)
+        return json.dumps([device.as_dict() for device in devices])
     if action in {"add", "repair"}:
         if len(arguments) != 3:
             raise CupsError("Parámetros administrativos incompletos")
