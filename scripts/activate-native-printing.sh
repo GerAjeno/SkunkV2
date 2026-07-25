@@ -158,7 +158,11 @@ rollback() {
 }
 trap rollback ERR
 
-candidate="$(mktemp)"
+# Keep the candidate beside the real CUPS configuration.  cupsd derives its
+# ServerRoot from the directory of the file passed with -c and may normalize
+# that directory's ownership and mode while validating it.  Using plain
+# mktemp here would therefore change /tmp from 1777 root:root to 0755 root:lp.
+candidate="$(mktemp /etc/cups/cupsd.conf.skunk-candidate.XXXXXX)"
 awk '
     BEGIN { root_location = 0 }
     /^[[:space:]]*<Location[[:space:]]+\/>[[:space:]]*$/ {

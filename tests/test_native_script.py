@@ -20,6 +20,11 @@ def test_native_activation_has_safe_check_and_rollback() -> None:
     assert 'print "Port 631"' in contents
     assert 'print "  Allow @LOCAL"' in contents
     assert "cupsctl --share-printers" not in contents
+    assert (
+        'candidate="$(mktemp /etc/cups/cupsd.conf.skunk-candidate.XXXXXX)"'
+        in contents
+    )
+    assert 'candidate="$(mktemp)"' not in contents
 
 
 def test_native_activation_limits_firewall_rules_to_detected_subnet() -> None:
