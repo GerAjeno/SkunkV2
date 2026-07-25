@@ -34,6 +34,7 @@ sudo -v
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 backup_dir="/var/backups/skunk-pc/update-${timestamp}"
 staging_dir="$(sudo mktemp -d /opt/skunk-pc/app.update.XXXXXX)"
+sudo chmod 0755 "$staging_dir"
 swapped=0
 
 cleanup() {

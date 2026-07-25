@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 import skunk_pc.cups as cups
 from skunk_pc.cups import (
     CommandResult,
@@ -34,13 +36,9 @@ def test_parse_zebra_uri() -> None:
     assert device.is_zebra is True
 
 
-def test_discovery_uses_admin_helper_when_cups_forbids_lpinfo(monkeypatch) -> None:
+def test_unprivileged_discovery_uses_only_admin_helper(monkeypatch) -> None:
     monkeypatch.setattr(cups, "_usb_cache_expires_at", 0.0)
-    monkeypatch.setattr(
-        cups,
-        "run_command",
-        lambda _args: CommandResult(1, "", "Forbidden"),
-    )
+    monkeypatch.setattr(cups, "run_command", lambda _args: pytest.fail("lpinfo was called"))
     monkeypatch.setattr(
         cups,
         "run_admin_helper",
@@ -75,8 +73,8 @@ def test_discovery_reuses_recent_result(monkeypatch) -> None:
     monkeypatch.setattr(cups, "_usb_cache_expires_at", 0.0)
     monkeypatch.setattr(cups, "run_command", fake_run_command)
 
-    first = discover_usb_printers()
-    second = discover_usb_printers()
+    first = discover_usb_printers(allow_admin_helper=False)
+    second = discover_usb_printers(allow_admin_helper=False)
 
     assert first == second
     assert calls == 1

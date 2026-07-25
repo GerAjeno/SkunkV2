@@ -115,10 +115,7 @@ def discover_usb_printers(
         if not refresh and now < _usb_cache_expires_at:
             return list(_usb_cache)
 
-        result = run_command(["lpinfo", "-v"])
-        if result.returncode != 0:
-            if not allow_admin_helper:
-                require_success(result, "No se pudieron consultar dispositivos CUPS")
+        if allow_admin_helper:
             response = run_admin_helper("devices")
             try:
                 items = json.loads(response)
@@ -138,6 +135,8 @@ def discover_usb_printers(
             except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
                 raise CupsError("Respuesta de dispositivos inválida") from exc
         else:
+            result = run_command(["lpinfo", "-v"])
+            require_success(result, "No se pudieron consultar dispositivos CUPS")
             devices = [
                 parse_device_uri(uri)
                 for uri in parse_lpinfo_devices(result.stdout)
