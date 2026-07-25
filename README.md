@@ -137,17 +137,21 @@ La secuencia completa de validación y reversión está en
 Hazlo únicamente después de validar una impresión desde la web nueva:
 
 ```bash
+sudo skunk-activate-native-printing --check
 sudo skunk-activate-native-printing
 ```
 
 Este comando:
 
+- Ofrece un modo `--check` que no realiza cambios.
 - Crea un respaldo de `cupsd.conf`.
 - Activa compartir impresoras en la red local mediante CUPS.
 - Deshabilita `cups-browsed`, evitando que las Lexmark de la red aparezcan como
   colas locales de Skunk PC.
 - Mantiene Avahi para mDNS.
 - Si UFW está activo, limita IPP y mDNS a la subred local.
+- Valida 4×6, 203 DPI, método térmico, sintaxis de CUPS y atributos IPP.
+- Restaura la configuración anterior si la activación falla.
 
 La impresora Zebra debe quedar marcada como compartida para que aparezca en el
 diálogo de impresión de Android/iPhone.
