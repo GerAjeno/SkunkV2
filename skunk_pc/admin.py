@@ -44,11 +44,14 @@ def _validate_uri(uri: str) -> str:
     return uri
 
 
-def _configure(name: str, uri: str, language: str) -> None:
+def _configure(name: str, uri: str, language: str, media_type: str) -> None:
     validate_printer_name(name)
     _validate_uri(uri)
     if language not in {"epl2", "zpl"}:
         raise CupsError("Lenguaje de impresora inválido")
+    if media_type not in {"thermal", "direct"}:
+        raise CupsError("Método térmico inválido")
+    cups_media_type = "Thermal" if media_type == "thermal" else "Direct"
     driver = (
         "drv:///sample.drv/zebraep2.ppd"
         if language == "epl2"
@@ -78,7 +81,7 @@ def _configure(name: str, uri: str, language: str) -> None:
         "-o",
         "Resolution=203dpi",
         "-o",
-        "MediaType=Direct",
+        f"MediaType={cups_media_type}",
     ]
     if uri.startswith("usb://"):
         arguments += ["-o", "usb-unidirectional-default=true"]
@@ -94,13 +97,13 @@ def dispatch(action: str, arguments: list[str]) -> str:
         devices = discover_usb_printers(allow_admin_helper=False)
         return json.dumps([device.as_dict() for device in devices])
     if action in {"add", "repair"}:
-        if len(arguments) != 3:
+        if len(arguments) != 4:
             raise CupsError("Parámetros administrativos incompletos")
-        name, uri, language = arguments
-        _configure(name, uri, language)
+        name, uri, language, media_type = arguments
+        _configure(name, uri, language, media_type)
         return (
             f"Impresora {name} configurada en 4×6, 203 DPI, "
-            f"{language.upper()} y URI estable"
+            f"{language.upper()}, {cups_media_type} y URI estable"
         )
     if action == "delete":
         if len(arguments) != 1:

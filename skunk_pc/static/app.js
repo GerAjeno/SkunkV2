@@ -67,6 +67,7 @@ function renderPrinters(printers) {
         <span>${escapeHtml(printer.language.toUpperCase())}</span>
         <span>${escapeHtml(printer.dpi)} DPI</span>
         <span>${escapeHtml(printer.page_size)}</span>
+        <span>${printer.media_type === "thermal" ? "CON RIBBON" : "TÉRMICA DIRECTA"}</span>
       </div>
       <div class="printer-actions">
         <button class="btn btn-secondary" data-action="test" data-printer="${escapeHtml(printer.name)}">Prueba</button>

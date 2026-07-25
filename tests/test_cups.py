@@ -6,6 +6,7 @@ import skunk_pc.cups as cups
 from skunk_pc.cups import (
     CommandResult,
     _ppd_identity,
+    _selected_ppd_choice,
     discover_usb_printers,
     parse_device_uri,
     parse_lpinfo_devices,
@@ -34,6 +35,12 @@ def test_parse_zebra_uri() -> None:
     assert device.model == "ZTC GC420t (EPL)"
     assert device.serial == "54J170200124"
     assert device.is_zebra is True
+
+
+def test_selected_ppd_choice() -> None:
+    output = "MediaType/Media Type: Saved *Thermal Direct"
+
+    assert _selected_ppd_choice(output, "MediaType") == "Thermal"
 
 
 def test_unprivileged_discovery_uses_only_admin_helper(monkeypatch) -> None:
@@ -97,6 +104,7 @@ def test_web_test_label_contains_origin_and_epl2_printer_name(monkeypatch) -> No
         language="epl2",
         dpi=203,
         page_size="w288h432",
+        media_type="thermal",
     )
     payloads = []
     monkeypatch.setattr(cups, "get_printer", lambda _name: printer)
@@ -106,6 +114,7 @@ def test_web_test_label_contains_origin_and_epl2_printer_name(monkeypatch) -> No
 
     assert "ORIGEN: PAGINA WEB" in payloads[0]
     assert "IMPRESORA: Zebra_01" in payloads[0]
+    assert payloads[0].startswith("\nO\n")
 
 
 def test_web_test_label_contains_origin_and_zpl_printer_name(monkeypatch) -> None:

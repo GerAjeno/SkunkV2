@@ -79,6 +79,7 @@ class AddPrinterRequest(BaseModel):
     name: str = Field(min_length=1, max_length=63)
     uri: str = Field(min_length=8, max_length=500)
     language: str = Field(pattern="^(epl2|zpl)$")
+    media_type: str = Field(default="direct", pattern="^(thermal|direct)$")
 
 
 def _server_ip() -> str:
@@ -309,7 +310,13 @@ async def api_repair_printer(printer_name: str, request: Request):
             status_code=409,
             detail="No se pudo determinar automáticamente el dispositivo físico",
         )
-    output = run_admin_helper("repair", printer.name, uri, printer.language)
+    output = run_admin_helper(
+        "repair",
+        printer.name,
+        uri,
+        printer.language,
+        printer.media_type,
+    )
     return {"ok": True, "message": output or "URI reparada y cola configurada en 4x6"}
 
 
@@ -323,7 +330,13 @@ async def api_add_printer(payload: AddPrinterRequest, request: Request):
             raise HTTPException(status_code=409, detail="El dispositivo USB no está conectado")
     else:
         validate_network_uri(payload.uri)
-    output = run_admin_helper("add", payload.name, payload.uri, payload.language)
+    output = run_admin_helper(
+        "add",
+        payload.name,
+        payload.uri,
+        payload.language,
+        payload.media_type,
+    )
     return {"ok": True, "message": output or "Impresora agregada"}
 
 

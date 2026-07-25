@@ -16,6 +16,7 @@ class Printer:
     language: str
     dpi: int
     page_size: str
+    media_type: str = "direct"
     physical_uri: str | None = None
 
     def as_dict(self) -> dict:

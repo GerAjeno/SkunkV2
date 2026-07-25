@@ -166,6 +166,17 @@ def _parse_dpi(value: str) -> int:
     return int(match.group(0)) if match else 203
 
 
+def _selected_ppd_choice(output: str, option: str) -> str:
+    prefix = f"{option}/"
+    for line in output.splitlines():
+        if not line.startswith(prefix) or ":" not in line:
+            continue
+        for choice in line.split(":", 1)[1].split():
+            if choice.startswith("*"):
+                return choice[1:]
+    return ""
+
+
 def _ppd_identity(name: str, *, ppd_dir: Path = Path("/etc/cups/ppd")) -> str:
     if not PRINTER_NAME_RE.fullmatch(name):
         return ""
@@ -226,6 +237,8 @@ def list_printers(*, include_non_zebra: bool = False) -> list[Printer]:
     for name, uri in configured.items():
         option_result = run_command(["lpoptions", "-p", name])
         options = _parse_options(option_result.stdout) if option_result.returncode == 0 else {}
+        choices_result = run_command(["lpoptions", "-p", name, "-l"])
+        choices = choices_result.stdout if choices_result.returncode == 0 else ""
         description = options.get("printer-info", name)
         make_model = options.get("printer-make-and-model", "")
         ppd_identity = _ppd_identity(name)
@@ -271,6 +284,11 @@ def list_printers(*, include_non_zebra: bool = False) -> list[Printer]:
                 language=language,
                 dpi=_parse_dpi(options.get("Resolution", "203dpi")),
                 page_size=options.get("PageSize", options.get("media", "desconocido")),
+                media_type=(
+                    "thermal"
+                    if _selected_ppd_choice(choices, "MediaType").lower() == "thermal"
+                    else "direct"
+                ),
                 physical_uri=physical_uri,
             )
         )
@@ -330,8 +348,9 @@ def send_raw(printer_name: str, payload: str) -> None:
 def send_test(printer_name: str) -> None:
     printer = get_printer(printer_name)
     if printer.language == "epl2":
+        thermal_mode = "O\n" if printer.media_type == "thermal" else "OD\n"
         payload = (
-            "\nN\nq812\nQ1218,24\n"
+            f"\n{thermal_mode}N\nq812\nQ1218,24\n"
             'A40,40,0,4,1,1,N,"SKUNK PC - PRUEBA EPL2"\n'
             'A40,105,0,3,1,1,N,"ORIGEN: PAGINA WEB"\n'
             f'A40,155,0,3,1,1,N,"IMPRESORA: {printer.name}"\n'

@@ -14,4 +14,4 @@ def test_add_printer_cancel_buttons_do_not_submit_form() -> None:
 def test_static_cache_is_bumped_for_dialog_fix() -> None:
     service_worker = (PACKAGE_DIR / "static" / "sw.js").read_text()
 
-    assert 'const CACHE = "skunk-pc-static-v2";' in service_worker
+    assert 'const CACHE = "skunk-pc-static-v3";' in service_worker
