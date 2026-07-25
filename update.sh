@@ -104,9 +104,20 @@ if [[ ! "$port" =~ ^[0-9]+$ ]]; then
     echo "No se pudo determinar el puerto configurado." >&2
     false
 fi
-sudo systemctl is-active --quiet skunk-admin skunk-worker skunk-api
-curl --fail --silent --show-error --output /dev/null \
-    "http://127.0.0.1:${port}/login"
+healthy=0
+for _attempt in {1..20}; do
+    if sudo systemctl is-active --quiet skunk-admin skunk-worker skunk-api &&
+       curl --fail --silent --output /dev/null \
+           "http://127.0.0.1:${port}/login"; then
+        healthy=1
+        break
+    fi
+    sleep 1
+done
+if (( healthy != 1 )); then
+    echo "Los servicios no superaron la validación dentro de 20 segundos." >&2
+    false
+fi
 
 trap - ERR
 server_ip="$(hostname -I | awk '{print $1}')"
