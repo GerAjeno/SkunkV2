@@ -13,6 +13,13 @@ venv_dir="${app_root}/venv"
 config_dir="/etc/skunk-pc"
 data_dir="/var/lib/skunk-pc"
 service_user="skunkpc"
+listen_port="${SKUNK_PORT:-8081}"
+
+if [[ ! "$listen_port" =~ ^[0-9]+$ ]] ||
+   (( listen_port < 1 || listen_port > 65535 )); then
+    echo "SKUNK_PORT debe ser un número entre 1 y 65535." >&2
+    exit 1
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
@@ -76,7 +83,7 @@ session_secret="$("${venv_dir}/bin/python" -c 'import secrets; print(secrets.tok
 
 cat > "${config_dir}/skunk.env" <<EOF
 SKUNK_HOST=0.0.0.0
-SKUNK_PORT=8081
+SKUNK_PORT=${listen_port}
 SKUNK_DATA_DIR=${data_dir}
 SKUNK_SESSION_SECRET=${session_secret}
 SKUNK_PASSWORD_HASH=${password_hash}
@@ -99,7 +106,6 @@ systemctl enable --now skunk-admin.service skunk-worker.service skunk-api.servic
 server_ip="$(hostname -I | awk '{print $1}')"
 echo
 echo "Skunk PC instalado en modo de prueba."
-echo "Panel nuevo: http://${server_ip}:8081"
+echo "Panel nuevo: http://${server_ip}:${listen_port}"
 echo "El sistema anterior no fue detenido ni reemplazado."
 echo "Para activar la configuración nativa segura: sudo skunk-activate-native-printing"
-

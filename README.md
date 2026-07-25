@@ -11,8 +11,9 @@ La web incluye un manifiesto instalable y caché únicamente para sus recursos
 estáticos. La instalación como PWA requiere HTTPS; por HTTP local funciona como
 web móvil normal. La impresión nativa por IPP no depende de la PWA.
 
-La versión `0.1.0` se instala en el puerto **8081** para convivir con el sistema
-anterior mientras se valida con la impresora física.
+El instalador usa el puerto **8081** de forma predeterminada para convivir con
+un sistema anterior. En un servidor nuevo puede seleccionarse otro puerto
+mediante `SKUNK_PORT`.
 
 ## Hardware confirmado
 
@@ -69,13 +70,19 @@ chmod +x install.sh uninstall.sh scripts/activate-native-printing.sh
 sudo ./install.sh
 ```
 
+Para instalar en el puerto 8080:
+
+```bash
+sudo env SKUNK_PORT=8080 ./install.sh
+```
+
 El instalador:
 
 - Instala CUPS, Avahi, Poppler, Ghostscript y Python.
 - Crea el usuario restringido `skunkpc`.
 - Solicita una contraseña para el panel.
 - Instala tres servicios systemd.
-- Inicia la web en `http://IP_DEL_SERVIDOR:8081`.
+- Inicia la web en el puerto elegido (8081 de forma predeterminada).
 - No detiene ni reemplaza el servicio antiguo del puerto 8080.
 - No modifica todavía `cupsd.conf`.
 
