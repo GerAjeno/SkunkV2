@@ -17,6 +17,9 @@ def test_native_activation_has_safe_check_and_rollback() -> None:
     assert "media-default" in contents
     assert "media-ready" in contents
     assert "restore_service_state cups.service" in contents
+    assert 'print "Port 631"' in contents
+    assert 'print "  Allow @LOCAL"' in contents
+    assert "cupsctl --share-printers" not in contents
 
 
 def test_native_activation_limits_firewall_rules_to_detected_subnet() -> None:

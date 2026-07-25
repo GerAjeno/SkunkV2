@@ -15,7 +15,7 @@ if [[ ${1:-} == "--check" ]]; then
     check_only=1
 fi
 
-for command in ip awk lpstat lpoptions cupsctl cupsd systemctl ipptool; do
+for command in ip awk lpstat lpoptions cupsd systemctl ipptool ss; do
     if ! command -v "$command" >/dev/null 2>&1; then
         echo "Falta el comando requerido: $command" >&2
         exit 1
@@ -88,7 +88,8 @@ echo "UFW activo: $([[ $ufw_active -eq 1 ]] && echo sí || echo no)"
 echo
 echo "Cambios previstos:"
 echo "- Respaldar /etc/cups/cupsd.conf."
-echo "- Activar el uso compartido CUPS y mantener su interfaz web deshabilitada."
+echo "- Escuchar IPP en el puerto 631 y permitirlo únicamente a @LOCAL."
+echo "- Activar DNS-SD y mantener la interfaz web de CUPS deshabilitada."
 echo "- Deshabilitar cups-browsed y habilitar CUPS/Avahi."
 echo "- Reiniciar CUPS y Avahi."
 if (( ufw_active == 1 )); then
@@ -118,6 +119,7 @@ cups_browsed_active="$(systemctl is-active cups-browsed.service 2>/dev/null || t
 install -m 0600 /etc/cups/cupsd.conf "$backup"
 ufw_ipp_added=0
 ufw_mdns_added=0
+candidate=""
 
 restore_service_state() {
     local unit="$1" enabled="$2" active="$3"
@@ -137,6 +139,9 @@ rollback() {
     exit_code=$?
     trap - ERR
     echo "Falló la activación; restaurando la configuración anterior." >&2
+    if [[ -n "$candidate" ]]; then
+        rm -f "$candidate"
+    fi
     install -o "$config_uid" -g "$config_gid" -m "$config_mode" \
         "$backup" /etc/cups/cupsd.conf
     if (( ufw_ipp_added == 1 )); then
@@ -153,14 +158,61 @@ rollback() {
 }
 trap rollback ERR
 
-cupsctl --share-printers
-cupsctl WebInterface=no
-cupsd -t
+candidate="$(mktemp)"
+awk '
+    BEGIN { root_location = 0 }
+    /^[[:space:]]*<Location[[:space:]]+\/>[[:space:]]*$/ {
+        root_location = 1
+        print
+        next
+    }
+    root_location && /^[[:space:]]*<\/Location>[[:space:]]*$/ {
+        root_location = 0
+        print
+        next
+    }
+    root_location && /^[[:space:]]*Allow[[:space:]]+@LOCAL[[:space:]]*$/ {
+        next
+    }
+    root_location && /^[[:space:]]*Order[[:space:]]+allow,deny[[:space:]]*$/ {
+        print
+        print "  Allow @LOCAL"
+        next
+    }
+    /^[[:space:]]*Listen[[:space:]]+localhost:631[[:space:]]*$/ {
+        print "Port 631"
+        next
+    }
+    /^[[:space:]]*Browsing[[:space:]]+/ {
+        print "Browsing Yes"
+        next
+    }
+    /^[[:space:]]*WebInterface[[:space:]]+/ {
+        print "WebInterface No"
+        next
+    }
+    { print }
+' /etc/cups/cupsd.conf >"$candidate"
+
+if ! cupsd -t -c "$candidate"; then
+    rm -f "$candidate"
+    echo "La configuración CUPS candidata no es válida." >&2
+    false
+fi
+install -o "$config_uid" -g "$config_gid" -m "$config_mode" \
+    "$candidate" /etc/cups/cupsd.conf
+rm -f "$candidate"
 
 systemctl disable --now cups-browsed.service 2>/dev/null || true
 systemctl enable cups.service avahi-daemon.service
 systemctl restart cups.service avahi-daemon.service
 systemctl is-active --quiet cups.service avahi-daemon.service
+if ! ss -H -lnt 'sport = :631' |
+    awk '{print $4}' |
+    grep -Ev '^(127\.0\.0\.1|\[::1\]):631$' >/dev/null; then
+    echo "CUPS no está escuchando IPP fuera de loopback." >&2
+    false
+fi
 
 if (( ufw_active == 1 )); then
     if ! ufw show added | grep -Fq \
