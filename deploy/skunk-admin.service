@@ -1,0 +1,31 @@
+[Unit]
+Description=Skunk PC - Agente local de administración CUPS
+After=cups.service
+Requires=cups.service
+
+[Service]
+Type=simple
+User=root
+Group=skunkpc
+EnvironmentFile=/etc/skunk-pc/skunk.env
+WorkingDirectory=/opt/skunk-pc/app
+ExecStart=/opt/skunk-pc/venv/bin/python -m skunk_pc.admin
+Restart=on-failure
+RestartSec=3
+RuntimeDirectory=skunk-pc
+RuntimeDirectoryMode=0750
+UMask=0007
+PrivateTmp=true
+PrivateDevices=false
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/run/skunk-pc
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
+

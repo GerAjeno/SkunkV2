@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Ingresar · Skunk PC</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="login-page">
+  <main class="login-card">
+    <div class="brand-mark" aria-hidden="true">🦨</div>
+    <p class="eyebrow">SERVIDOR DE IMPRESIÓN LOCAL</p>
+    <h1>Skunk PC</h1>
+    <p class="muted">Administra e imprime etiquetas Zebra 4×6 desde tu teléfono.</p>
+    {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+    <form method="post" action="/login" class="login-form">
+      <label for="password">Contraseña</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+      <button class="btn btn-primary btn-block" type="submit">Ingresar</button>
+    </form>
+  </main>
+</body>
+</html>
+

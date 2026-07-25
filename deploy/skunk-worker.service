@@ -1,0 +1,30 @@
+[Unit]
+Description=Skunk PC - Conversión y cola de impresión
+After=cups.service skunk-admin.service
+Requires=cups.service
+
+[Service]
+Type=simple
+User=skunkpc
+Group=skunkpc
+SupplementaryGroups=lp
+EnvironmentFile=/etc/skunk-pc/skunk.env
+WorkingDirectory=/opt/skunk-pc/app
+ExecStart=/opt/skunk-pc/venv/bin/python -m skunk_pc.worker
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/var/lib/skunk-pc
+RestrictAddressFamilies=AF_UNIX
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
+

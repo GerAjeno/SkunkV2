@@ -1,0 +1,32 @@
+[Unit]
+Description=Skunk PC - API y panel web
+After=network-online.target cups.service skunk-admin.service
+Wants=network-online.target
+Requires=skunk-admin.service
+
+[Service]
+Type=simple
+User=skunkpc
+Group=skunkpc
+SupplementaryGroups=lp
+EnvironmentFile=/etc/skunk-pc/skunk.env
+WorkingDirectory=/opt/skunk-pc/app
+ExecStart=/opt/skunk-pc/venv/bin/python -m skunk_pc.main
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/var/lib/skunk-pc
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target
+

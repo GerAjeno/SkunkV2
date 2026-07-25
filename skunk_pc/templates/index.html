@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050706">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>Skunk PC Print Server</title>
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true">🦨</span>
+      <span>
+        <strong>Skunk PC</strong>
+        <small>Print Server · Zebra 4×6</small>
+      </span>
+    </a>
+    <div class="topbar-actions">
+      <span id="cups-badge" class="status-pill neutral">CUPS…</span>
+      <button id="theme-toggle" class="btn btn-quiet" type="button">☀️ Tema</button>
+      <form method="post" action="/logout">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <button class="btn btn-quiet" type="submit" data-csrf-form>Salir</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="overview-grid" aria-label="Estado del servidor">
+      <article class="metric">
+        <span>IMPRESORAS ZEBRA</span>
+        <strong id="metric-printers">—</strong>
+        <small id="metric-ready">Consultando…</small>
+      </article>
+      <article class="metric accent">
+        <span>DIRECCIÓN EN PLANTA</span>
+        <strong>{{ server_ip }}</strong>
+        <small>Web {{ port }} · IPP 631</small>
+      </article>
+      <article class="metric">
+        <span>FORMATO DE SALIDA</span>
+        <strong>4 × 6</strong>
+        <small>812 × 1218 px · 203 DPI</small>
+      </article>
+      <article class="metric">
+        <span>OTRAS COLAS DE RED</span>
+        <strong id="metric-foreign">—</strong>
+        <small>No se mostrarán como Zebra</small>
+      </article>
+    </section>
+
+    <section class="print-studio">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">IMPRESIÓN DESDE EL TELÉFONO</p>
+          <h1>Imprimir etiqueta 4×6</h1>
+          <p>Sube un PDF, imagen o texto. Skunk PC lo ajustará antes de enviarlo.</p>
+        </div>
+        <span class="native-note">También disponible desde “Imprimir” en Android/iPhone</span>
+      </div>
+
+      <form id="print-form" class="print-form">
+        <label id="drop-zone" class="drop-zone" for="document">
+          <input id="document" name="document" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,.txt,.csv" required>
+          <span class="drop-icon">⬆</span>
+          <strong id="file-label">Toca para seleccionar un archivo</strong>
+          <small>PDF, PNG, JPEG, WebP, TIFF o texto · máximo {{ max_upload_mb }} MB</small>
+        </label>
+
+        <div class="print-controls">
+          <label>
+            Impresora
+            <select id="printer-select" name="printer_name" required>
+              <option value="">Buscando impresoras…</option>
+            </select>
+          </label>
+          <label>
+            Ajuste
+            <select name="fit_mode">
+              <option value="contain">Completa, sin recortar</option>
+              <option value="cover">Llenar etiqueta, puede recortar</option>
+            </select>
+          </label>
+          <label>
+            Orientación
+            <select name="orientation">
+              <option value="auto">Automática</option>
+              <option value="portrait">Vertical</option>
+              <option value="landscape">Horizontal</option>
+            </select>
+          </label>
+          <label>
+            Copias
+            <input name="copies" type="number" min="1" max="20" value="1">
+          </label>
+        </div>
+        <button id="print-submit" class="btn btn-primary btn-large" type="submit">
+          Imprimir ahora
+        </button>
+        <div id="print-message" class="form-message" role="status"></div>
+      </form>
+    </section>
+
+    <section>
+      <div class="section-heading compact">
+        <div>
+          <p class="eyebrow">HARDWARE</p>
+          <h2>Impresoras Zebra</h2>
+        </div>
+        <button id="add-printer-button" class="btn btn-secondary" type="button">+ Añadir impresora</button>
+      </div>
+      <div id="printer-grid" class="printer-grid">
+        <div class="empty-card">Cargando impresoras…</div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-heading compact">
+        <div>
+          <p class="eyebrow">ACTIVIDAD</p>
+          <h2>Trabajos recientes</h2>
+        </div>
+        <button id="refresh-button" class="btn btn-quiet" type="button">Actualizar</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Archivo</th><th>Impresora</th><th>Estado</th><th>Páginas</th><th>Hora</th></tr>
+          </thead>
+          <tbody id="jobs-body">
+            <tr><td colspan="5" class="muted">Sin trabajos todavía.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="add-printer-dialog">
+    <form id="add-printer-form" method="dialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">NUEVA COLA</p>
+          <h2>Añadir Zebra</h2>
+        </div>
+        <button class="icon-button" value="cancel" aria-label="Cerrar">×</button>
+      </div>
+      <label>
+        Nombre visible
+        <input name="name" pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,62}" placeholder="Zebra_Bodega_1" required>
+      </label>
+      <label>
+        Dispositivo USB
+        <select id="device-select" name="uri" required></select>
+      </label>
+      <label>
+        Lenguaje
+        <select name="language">
+          <option value="epl2">EPL2 — GC420t detectada</option>
+          <option value="zpl">ZPL</option>
+        </select>
+      </label>
+      <div class="dialog-actions">
+        <button class="btn btn-quiet" value="cancel">Cancelar</button>
+        <button class="btn btn-primary" value="default">Crear impresora</button>
+      </div>
+      <div id="add-message" class="form-message"></div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
+

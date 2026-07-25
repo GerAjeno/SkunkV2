@@ -1,0 +1,9 @@
+{
+  "name": "Skunk PC Print Server",
+  "short_name": "Skunk PC",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050706",
+  "theme_color": "#050706",
+  "description": "Impresión local de etiquetas Zebra 4x6"
+}
