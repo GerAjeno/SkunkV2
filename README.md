@@ -62,7 +62,65 @@ Cada página es:
 Los documentos de Office no están habilitados en esta primera versión. Se
 agregarán mediante una conversión aislada después de validar PDF e imágenes.
 
-## Instalación
+## Paquete Debian recomendado
+
+El método recomendado para servidores nuevos es el paquete `.deb` para Ubuntu
+26.04 LTS en arquitectura AMD64. Incluye la aplicación y todas sus dependencias
+Python en un repositorio interno de wheels, por lo que la fase Python no
+necesita conectarse a Internet durante la instalación.
+
+Instala el paquete con `apt` para que también resuelva las dependencias del
+sistema:
+
+```bash
+sudo apt install ./skunk-pc_VERSION_amd64.deb
+sudo skunk-setup
+```
+
+`skunk-setup`:
+
+- Solicita una contraseña de al menos diez caracteres.
+- Genera un secreto de sesión nuevo.
+- Crea `/etc/skunk-pc/skunk.env` con permisos restringidos.
+- Usa el puerto 8080 de forma predeterminada; puede cambiarse con
+  `sudo skunk-setup --port PUERTO`.
+- Activa y valida los cuatro servicios.
+- Nunca sobrescribe una configuración existente.
+
+Los datos y el historial se almacenan en `/var/lib/skunk-pc`. Una actualización
+del paquete conserva tanto ese directorio como `/etc/skunk-pc/skunk.env` y
+reinicia los servicios con la nueva versión.
+
+Para construir el paquete desde el repositorio:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -e '.[test]'
+./scripts/build-deb.sh
+```
+
+El artefacto y su suma SHA-256 quedan en `dist/`. Las versiones de sus
+dependencias de ejecución y construcción están fijadas en los archivos
+`packaging/debian/*requirements.lock`. Debe construirse con Python 3.14 sobre
+AMD64, porque contiene wheels binarios dirigidos a Ubuntu 26.04.
+
+Para desinstalar la aplicación conservando configuración e historial:
+
+```bash
+sudo apt remove skunk-pc
+```
+
+`apt purge` elimina además `/etc/skunk-pc/skunk.env`, pero conserva
+deliberadamente `/var/lib/skunk-pc` para evitar pérdida accidental del
+historial. Ese directorio solo debe eliminarse después de realizar un respaldo.
+
+Después de instalar mediante `.deb`, las actualizaciones deben realizarse
+instalando una versión posterior del paquete. No mezcles esa modalidad con
+`update.sh`, ya que el gestor de paquetes debe mantener la propiedad de los
+archivos instalados.
+
+## Instalación desde el código fuente
 
 Descomprime el paquete, entra a su carpeta y ejecuta:
 

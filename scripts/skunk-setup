@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+if [[ ${EUID} -ne 0 ]]; then
+    echo "Ejecuta con sudo: sudo skunk-setup [--port PUERTO]" >&2
+    exit 1
+fi
+
+port=8080
+if [[ $# -gt 0 ]]; then
+    if [[ $# -ne 2 || $1 != "--port" ]]; then
+        echo "Uso: sudo skunk-setup [--port PUERTO]" >&2
+        exit 1
+    fi
+    port=$2
+fi
+if [[ ! $port =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
+    echo "El puerto debe ser un número entre 1 y 65535." >&2
+    exit 1
+fi
+
+config_dir=/etc/skunk-pc
+config_file=$config_dir/skunk.env
+data_dir=/var/lib/skunk-pc
+venv_python=/opt/skunk-pc/venv/bin/python
+
+if [[ -s $config_file ]]; then
+    echo "Skunk PC ya está configurado en $config_file." >&2
+    echo "El instalador no lo sobrescribirá automáticamente." >&2
+    exit 1
+fi
+if [[ ! -x $venv_python ]]; then
+    echo "El entorno de Skunk PC no está instalado correctamente." >&2
+    exit 1
+fi
+
+password=${SKUNK_ADMIN_PASSWORD:-}
+if [[ -z $password ]]; then
+    if [[ ! -t 0 ]]; then
+        echo "Define SKUNK_ADMIN_PASSWORD para configurar sin interacción." >&2
+        exit 1
+    fi
+    while true; do
+        read -r -s -p "Contraseña del panel (mínimo 10 caracteres): " password
+        echo
+        read -r -s -p "Repite la contraseña: " confirmation
+        echo
+        if [[ $password != "$confirmation" ]]; then
+            echo "Las contraseñas no coinciden."
+        elif (( ${#password} < 10 )); then
+            echo "La contraseña es demasiado corta."
+        else
+            break
+        fi
+    done
+fi
+if (( ${#password} < 10 )); then
+    echo "La contraseña debe tener al menos 10 caracteres." >&2
+    exit 1
+fi
+
+password_hash="$(
+    printf %s "$password" |
+        "$venv_python" -c \
+        'import sys; from skunk_pc.auth import hash_password; print(hash_password(sys.stdin.read()))'
+)"
+unset password confirmation
+session_secret="$("$venv_python" -c \
+    'import secrets; print(secrets.token_urlsafe(48))')"
+
+install -d -m 0750 -o root -g skunkpc "$config_dir"
+candidate="$(mktemp "$config_dir/skunk.env.XXXXXX")"
+cleanup() {
+    rm -f -- "${candidate:-}"
+}
+trap cleanup EXIT
+cat >"$candidate" <<EOF
+SKUNK_HOST=0.0.0.0
+SKUNK_PORT=$port
+SKUNK_DATA_DIR=$data_dir
+SKUNK_SESSION_SECRET=$session_secret
+SKUNK_PASSWORD_HASH=$password_hash
+SKUNK_MAX_UPLOAD_MB=30
+SKUNK_JOB_RETENTION_HOURS=720
+SKUNK_ADMIN_SOCKET=/run/skunk-pc/admin.sock
+EOF
+chown root:skunkpc "$candidate"
+chmod 0640 "$candidate"
+mv "$candidate" "$config_file"
+candidate=""
+
+systemctl enable \
+    skunk-admin.service skunk-worker.service \
+    skunk-api.service skunk-console.service >/dev/null
+systemctl restart \
+    skunk-admin.service skunk-worker.service \
+    skunk-api.service skunk-console.service
+
+healthy=0
+for _attempt in {1..20}; do
+    if systemctl is-active --quiet \
+           skunk-admin.service skunk-worker.service \
+           skunk-api.service skunk-console.service &&
+       curl --fail --silent --output /dev/null \
+           "http://127.0.0.1:$port/login"; then
+        healthy=1
+        break
+    fi
+    sleep 1
+done
+if (( healthy != 1 )); then
+    echo "La configuración fue guardada, pero los servicios no superaron la validación." >&2
+    echo "Consulta: systemctl status skunk-api skunk-worker skunk-admin" >&2
+    exit 1
+fi
+
+echo "Skunk PC configurado correctamente."
+echo "Consulta la dirección asignada con: hostname -I"
+echo "Activa la impresión nativa después de instalar las colas Zebra desde la web."

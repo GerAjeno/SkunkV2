@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+
+case "${1:-}" in
+    remove|purge)
+        rm -rf -- /opt/skunk-pc/venv
+        ;;
+esac
+
+if [ "${1:-}" = purge ]; then
+    rm -f -- /etc/skunk-pc/skunk.env
+    rmdir /etc/skunk-pc 2>/dev/null || true
+fi
+
+systemctl daemon-reload 2>/dev/null || true
+
+if [ "${1:-}" = purge ]; then
+    echo "El historial y los archivos de /var/lib/skunk-pc se conservaron."
+fi
+
+exit 0

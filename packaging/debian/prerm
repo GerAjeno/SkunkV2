@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+case "${1:-}" in
+    remove|deconfigure)
+        systemctl disable --now \
+            skunk-api.service skunk-worker.service \
+            skunk-admin.service skunk-console.service 2>/dev/null || true
+        systemctl enable --now getty@tty1.service 2>/dev/null || true
+        ;;
+esac
+
+exit 0

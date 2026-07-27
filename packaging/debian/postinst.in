@@ -1,0 +1,82 @@
+#!/bin/sh
+set -eu
+
+service_user=skunkpc
+data_dir=/var/lib/skunk-pc
+venv_dir=/opt/skunk-pc/venv
+wheel_dir=/usr/share/skunk-pc/wheels
+version=@VERSION@
+
+if ! getent group "$service_user" >/dev/null; then
+    addgroup --system "$service_user"
+fi
+if ! id "$service_user" >/dev/null 2>&1; then
+    adduser --system --ingroup "$service_user" --home "$data_dir" \
+        --no-create-home --shell /usr/sbin/nologin "$service_user"
+fi
+if ! id -nG "$service_user" | tr " " "\n" | grep -qx lp; then
+    adduser "$service_user" lp
+fi
+
+install -d -m 0755 -o root -g root /opt/skunk-pc
+install -d -m 0750 -o root -g "$service_user" /etc/skunk-pc
+install -d -m 0750 -o "$service_user" -g "$service_user" \
+    "$data_dir" "$data_dir/uploads" "$data_dir/output"
+
+if [ ! -x "$venv_dir/bin/python" ]; then
+    python3 -m venv "$venv_dir"
+fi
+"$venv_dir/bin/python" -m pip install \
+    --disable-pip-version-check \
+    --no-index \
+    --find-links "$wheel_dir" \
+    --upgrade \
+    --force-reinstall \
+    "skunk-pc==$version"
+
+legacy_backup=/var/backups/skunk-pc/deb-migration
+for unit in \
+    skunk-admin.service \
+    skunk-worker.service \
+    skunk-api.service \
+    skunk-console.service
+do
+    legacy_unit="/etc/systemd/system/$unit"
+    if [ -f "$legacy_unit" ] && [ ! -L "$legacy_unit" ]; then
+        install -d -m 0700 -o root -g root "$legacy_backup"
+        if [ ! -e "$legacy_backup/$unit" ]; then
+            mv "$legacy_unit" "$legacy_backup/$unit"
+        else
+            rm -f -- "$legacy_unit"
+        fi
+    fi
+done
+legacy_activator=/usr/local/sbin/skunk-activate-native-printing
+if [ -f "$legacy_activator" ]; then
+    install -d -m 0700 -o root -g root "$legacy_backup"
+    if [ ! -e "$legacy_backup/skunk-activate-native-printing" ]; then
+        mv "$legacy_activator" "$legacy_backup/skunk-activate-native-printing"
+    else
+        rm -f -- "$legacy_activator"
+    fi
+fi
+
+systemctl daemon-reload
+systemctl enable getty@tty1.service >/dev/null
+systemctl reload dbus.service 2>/dev/null || true
+
+if [ -s /etc/skunk-pc/skunk.env ]; then
+    systemctl reenable \
+        skunk-admin.service skunk-worker.service \
+        skunk-api.service skunk-console.service >/dev/null
+    systemctl restart \
+        skunk-admin.service skunk-worker.service \
+        skunk-api.service skunk-console.service
+else
+    systemctl disable \
+        skunk-admin.service skunk-worker.service \
+        skunk-api.service skunk-console.service 2>/dev/null || true
+    echo "Skunk PC instalado. Ejecuta: sudo skunk-setup"
+fi
+
+exit 0
