@@ -1,0 +1,12 @@
+#cloud-config
+autoinstall:
+  version: 1
+  interactive-sections:
+    - "*"
+  late-commands:
+    - cp /cdrom/skunk/skunk-pc.deb /target/tmp/skunk-pc.deb
+    - curtin in-target --target=/target -- apt-get update
+    - curtin in-target --target=/target -- env DEBIAN_FRONTEND=noninteractive apt-get install -y /tmp/skunk-pc.deb
+    - rm -f /target/tmp/skunk-pc.deb
+    - install -m 0755 /cdrom/skunk/99-skunk-pc /target/etc/update-motd.d/99-skunk-pc
+    - cp /cdrom/skunk/PRIMER-INICIO.txt /target/root/PRIMER-INICIO-SKUNK-PC.txt

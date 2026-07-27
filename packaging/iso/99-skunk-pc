@@ -1,0 +1,8 @@
+#!/bin/sh
+
+if [ ! -s /etc/skunk-pc/skunk.env ]; then
+    printf '\n'
+    printf 'Skunk PC está instalado, pero falta su configuración inicial.\n'
+    printf 'Ejecuta: sudo skunk-setup\n'
+    printf '\n'
+fi

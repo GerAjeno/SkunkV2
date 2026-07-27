@@ -1,0 +1,19 @@
+SKUNK PC - PRIMER INICIO
+========================
+
+El paquete de Skunk PC ya está instalado.
+
+1. Inicia sesión con el usuario creado durante la instalación.
+2. Ejecuta:
+
+       sudo skunk-setup
+
+3. Define la contraseña del panel y confirma el puerto.
+4. Abre el panel desde otro equipo usando el nombre o la IP del servidor.
+5. Añade las impresoras Zebra desde la página web.
+6. Después de validar una impresión web, activa la impresión nativa:
+
+       sudo skunk-activate-native-printing --check
+       sudo skunk-activate-native-printing
+
+No conectes simultáneamente el servidor original y su clon a la misma red.

@@ -120,6 +120,40 @@ instalando una versión posterior del paquete. No mezcles esa modalidad con
 `update.sh`, ya que el gestor de paquetes debe mantener la propiedad de los
 archivos instalados.
 
+## ISO instalable
+
+También puede construirse una ISO AMD64 basada en la imagen oficial de Ubuntu
+Server 26.04. La ISO añade una opción guiada al menú de arranque, conserva el
+instalador normal y no contiene contraseñas, nombres de impresora, direcciones
+IP ni credenciales Wi-Fi.
+
+Primero construye el `.deb` y después la ISO:
+
+```bash
+./scripts/build-deb.sh
+./scripts/build-iso.sh /ruta/ubuntu-26.04-live-server-amd64.iso
+```
+
+El constructor acepta únicamente la edición oficial 20260420.1 cuya suma
+SHA-256 está fijada en el script. El artefacto y su archivo `.sha256` quedan en
+`dist/`.
+
+Al arrancar selecciona **Instalar Ubuntu Server + Skunk PC (guiado)**. El
+instalador solicitará red, almacenamiento, identidad y SSH antes de modificar
+el disco. La red debe tener acceso a los repositorios de Ubuntu para resolver
+las dependencias del sistema; las dependencias Python ya están incluidas en el
+`.deb`.
+
+Después del primer inicio:
+
+```bash
+sudo skunk-setup
+```
+
+La instalación muestra este recordatorio al iniciar sesión hasta que exista la
+configuración de Skunk PC. Después se añaden las impresoras desde la web y se
+activa la impresión nativa únicamente tras validar una impresión web.
+
 ## Instalación desde el código fuente
 
 Descomprime el paquete, entra a su carpeta y ejecuta:
