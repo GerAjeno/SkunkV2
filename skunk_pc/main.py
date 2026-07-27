@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import socket
 import uuid
@@ -23,6 +24,8 @@ from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
 from .auth import (
+    LoginBodyLimitMiddleware,
+    login_attempts,
     new_csrf_token,
     require_authenticated,
     require_csrf,
@@ -49,6 +52,7 @@ from .jobs import cancel_job, create_job, list_all_jobs
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
+log = logging.getLogger("skunk-api")
 
 
 @asynccontextmanager
@@ -74,6 +78,7 @@ app.add_middleware(
     same_site="lax",
     https_only=False,
 )
+app.add_middleware(LoginBodyLimitMiddleware)
 app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
 
 
@@ -121,12 +126,44 @@ async def login_page(request: Request):
 
 
 @app.post("/login", response_class=HTMLResponse)
-async def login(request: Request, password: str = Form(...)):
+async def login(request: Request, password: str = Form(..., min_length=1, max_length=256)):
+    client_ip = request.client.host if request.client else "unknown"
+    retry_after = login_attempts.retry_after(client_ip)
+    if retry_after:
+        log.warning(
+            "Inicio de sesión bloqueado temporalmente para IP %s (%ss restantes)",
+            client_ip,
+            retry_after,
+        )
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={
+                "error": "Demasiados intentos. Espera 15 minutos antes de reintentar."
+            },
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            headers={"Retry-After": str(retry_after)},
+        )
     if verify_password(password, settings.password_hash):
+        login_attempts.record_success(client_ip)
+        log.info("Inicio de sesión correcto desde IP %s", client_ip)
         request.session.clear()
         request.session["authenticated"] = True
         request.session["csrf"] = new_csrf_token()
         return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
+    delay, retry_after = login_attempts.record_failure(client_ip)
+    log.warning("Inicio de sesión fallido desde IP %s", client_ip)
+    if retry_after:
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={
+                "error": "Demasiados intentos. Acceso bloqueado durante 15 minutos."
+            },
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            headers={"Retry-After": str(retry_after)},
+        )
+    await asyncio.sleep(delay)
     return templates.TemplateResponse(
         request=request,
         name="login.html",

@@ -172,6 +172,10 @@ la consola física `tty1`. Se ejecuta como el usuario restringido `skunkpc`, no
 como root. Al salir de `btop` con `q`, la consola muestra el inicio de sesión
 normal de `tty1`.
 
+El acceso al panel limita cada IP a cinco contraseñas incorrectas dentro de diez
+minutos. El quinto fallo bloquea nuevos intentos durante quince minutos y queda
+registrado en el journal de `skunk-api`, sin almacenar la contraseña introducida.
+
 ## Seguridad
 
 Esta versión no:
