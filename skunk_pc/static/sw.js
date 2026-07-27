@@ -1,8 +1,12 @@
-const CACHE = "skunk-pc-static-v5";
+const CACHE = "skunk-pc-static-v6";
 const STATIC_ASSETS = [
   "/static/app.css",
   "/static/app.js",
-  "/static/manifest.webmanifest"
+  "/static/manifest.webmanifest",
+  "/static/icon-192.png",
+  "/static/icon-512.png",
+  "/static/apple-touch-icon.png",
+  "/static/favicon-32.png"
 ];
 
 self.addEventListener("install", (event) => {

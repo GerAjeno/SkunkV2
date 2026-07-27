@@ -5,5 +5,19 @@
   "display": "standalone",
   "background_color": "#050706",
   "theme_color": "#050706",
-  "description": "Impresión local de etiquetas Zebra 4x6"
+  "description": "Impresión local de etiquetas Zebra 4x6",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
 }
