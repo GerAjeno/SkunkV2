@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import socket
 import uuid
@@ -171,7 +172,7 @@ async def service_worker():
 @app.get("/api/status")
 async def api_status(request: Request):
     require_authenticated(request)
-    all_printers = list_printers(include_non_zebra=True)
+    all_printers = await asyncio.to_thread(list_printers, include_non_zebra=True)
     zebra_printers = [printer for printer in all_printers if printer.is_zebra]
     return {
         "ok": True,
@@ -187,12 +188,11 @@ async def api_status(request: Request):
 @app.get("/api/printers")
 async def api_printers(request: Request):
     require_authenticated(request)
-    return {"ok": True, "printers": [printer.as_dict() for printer in list_printers()]}
+    printers = await asyncio.to_thread(list_printers)
+    return {"ok": True, "printers": [printer.as_dict() for printer in printers]}
 
 
-@app.get("/api/devices")
-async def api_devices(request: Request):
-    require_authenticated(request)
+def _device_snapshot() -> list[dict]:
     configured_uris: dict[str, str] = {}
     for printer in list_printers():
         configured_uris[printer.uri] = printer.name
@@ -212,13 +212,21 @@ async def api_devices(request: Request):
         }
         item["installed_queue"] = configured_uris.get(device.uri)
         devices.append(item)
+    return devices
+
+
+@app.get("/api/devices")
+async def api_devices(request: Request):
+    require_authenticated(request)
+    devices = await asyncio.to_thread(_device_snapshot)
     return {"ok": True, "devices": devices}
 
 
 @app.get("/api/jobs")
 async def api_jobs(request: Request, limit: int = 30):
     require_authenticated(request)
-    return {"ok": True, "jobs": list_jobs(limit)}
+    jobs = await asyncio.to_thread(list_jobs, limit)
+    return {"ok": True, "jobs": jobs}
 
 
 async def _save_upload(upload: UploadFile) -> Path:
@@ -263,7 +271,10 @@ async def api_create_job(
     document: UploadFile = File(...),
 ):
     require_csrf(request)
-    printer = get_printer(validate_printer_name(printer_name))
+    printer = await asyncio.to_thread(
+        get_printer,
+        validate_printer_name(printer_name),
+    )
     if not printer.is_zebra:
         raise HTTPException(status_code=400, detail="La cola no corresponde a una Zebra")
     if not printer.connected:
@@ -277,7 +288,8 @@ async def api_create_job(
 
     source = await _save_upload(document)
     try:
-        job = create_job(
+        job = await asyncio.to_thread(
+            create_job,
             printer_name=printer.name,
             original_name=Path(document.filename or "documento").name,
             content_type=document.content_type or "application/octet-stream",
@@ -295,7 +307,7 @@ async def api_create_job(
 @app.post("/api/jobs/{job_id}/cancel")
 async def api_cancel_job(job_id: str, request: Request):
     require_csrf(request)
-    if not cancel_job(job_id):
+    if not await asyncio.to_thread(cancel_job, job_id):
         raise HTTPException(status_code=409, detail="El trabajo ya está en procesamiento")
     return {"ok": True}
 
@@ -303,22 +315,23 @@ async def api_cancel_job(job_id: str, request: Request):
 @app.post("/api/printers/{printer_name}/test")
 async def api_test_printer(printer_name: str, request: Request):
     require_csrf(request)
-    send_test(printer_name)
+    await asyncio.to_thread(send_test, printer_name)
     return {"ok": True, "message": "Etiqueta de prueba enviada"}
 
 
 @app.post("/api/printers/{printer_name}/calibrate")
 async def api_calibrate_printer(printer_name: str, request: Request):
     require_csrf(request)
-    calibrate(printer_name)
+    await asyncio.to_thread(calibrate, printer_name)
     return {"ok": True, "message": "Calibración enviada"}
 
 
 @app.post("/api/printers/{printer_name}/repair")
 async def api_repair_printer(printer_name: str, request: Request):
     require_csrf(request)
-    printer = get_printer(printer_name)
-    devices = [device for device in discover_usb_printers() if device.is_zebra]
+    printer = await asyncio.to_thread(get_printer, printer_name)
+    devices = await asyncio.to_thread(discover_usb_printers)
+    devices = [device for device in devices if device.is_zebra]
     if printer.physical_uri:
         uri = printer.physical_uri
     elif len(devices) == 1:
@@ -328,7 +341,8 @@ async def api_repair_printer(printer_name: str, request: Request):
             status_code=409,
             detail="No se pudo determinar automáticamente el dispositivo físico",
         )
-    output = run_admin_helper(
+    output = await asyncio.to_thread(
+        run_admin_helper,
         "repair",
         printer.name,
         uri,
@@ -343,12 +357,14 @@ async def api_add_printer(payload: AddPrinterRequest, request: Request):
     require_csrf(request)
     validate_printer_name(payload.name)
     if payload.uri.startswith("usb://"):
-        available = {device.uri for device in discover_usb_printers() if device.is_zebra}
+        devices = await asyncio.to_thread(discover_usb_printers)
+        available = {device.uri for device in devices if device.is_zebra}
         if payload.uri not in available:
             raise HTTPException(status_code=409, detail="El dispositivo USB no está conectado")
     else:
         validate_network_uri(payload.uri)
-    output = run_admin_helper(
+    output = await asyncio.to_thread(
+        run_admin_helper,
         "add",
         payload.name,
         payload.uri,
@@ -362,7 +378,7 @@ async def api_add_printer(payload: AddPrinterRequest, request: Request):
 async def api_delete_printer(printer_name: str, request: Request):
     require_csrf(request)
     validate_printer_name(printer_name)
-    output = run_admin_helper("delete", printer_name)
+    output = await asyncio.to_thread(run_admin_helper, "delete", printer_name)
     return {"ok": True, "message": output or "Impresora eliminada"}
 
 

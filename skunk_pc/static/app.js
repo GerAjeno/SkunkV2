@@ -105,7 +105,10 @@ function renderJobs(jobs) {
   }).join("");
 }
 
+let refreshInProgress = false;
 async function refresh() {
+  if (refreshInProgress) return;
+  refreshInProgress = true;
   try {
     const [status, printers, jobs] = await Promise.all([
       api("/api/status"),
@@ -121,6 +124,8 @@ async function refresh() {
     renderJobs(jobs.jobs);
   } catch (error) {
     toast(error.message);
+  } finally {
+    refreshInProgress = false;
   }
 }
 

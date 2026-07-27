@@ -17,7 +17,7 @@ def test_add_printer_cancel_buttons_do_not_submit_form() -> None:
 def test_static_cache_is_current() -> None:
     service_worker = (PACKAGE_DIR / "static" / "sw.js").read_text()
 
-    assert 'const CACHE = "skunk-pc-static-v6";' in service_worker
+    assert 'const CACHE = "skunk-pc-static-v7";' in service_worker
 
 
 def test_add_printer_marks_missing_serials_and_installed_devices() -> None:
@@ -44,3 +44,10 @@ def test_project_icon_is_used_by_pages_and_manifest() -> None:
     assert 'src="/static/icon-192.png"' in login
     assert '"src": "/static/icon-192.png"' in manifest
     assert '"src": "/static/icon-512.png"' in manifest
+
+
+def test_periodic_refreshes_do_not_overlap() -> None:
+    javascript = (PACKAGE_DIR / "static" / "app.js").read_text()
+
+    assert "let refreshInProgress = false;" in javascript
+    assert "if (refreshInProgress) return;" in javascript
