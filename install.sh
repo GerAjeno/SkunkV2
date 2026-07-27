@@ -26,7 +26,12 @@ apt-get update
 apt-get install -y \
     cups cups-client cups-filters avahi-daemon avahi-utils \
     python3 python3-venv python3-pip poppler-utils ghostscript \
-    fonts-dejavu-core
+    fonts-dejavu-core colord
+
+# A newly installed colord policy is not necessarily picked up by an already
+# running system D-Bus daemon.  Without this reload, every raster conversion
+# can wait twice for the 25-second ColorManager activation timeout.
+systemctl reload dbus.service
 
 if ! getent group "$service_user" >/dev/null; then
     groupadd --system "$service_user"
