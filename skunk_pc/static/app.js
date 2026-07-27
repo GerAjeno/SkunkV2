@@ -227,7 +227,14 @@ $("#add-printer-button")?.addEventListener("click", async () => {
     for (const device of data.devices) {
       const option = document.createElement("option");
       option.value = device.uri;
-      option.textContent = `${device.model} · S/N ${device.serial || "sin serie"}`;
+      const serial = device.serial_available
+        ? `S/N ${device.serial}`
+        : "S/N no informado";
+      const status = device.installed_queue
+        ? `YA INSTALADA: ${device.installed_queue}`
+        : "DISPONIBLE";
+      option.textContent = `${device.model} · ${serial} · ${status}`;
+      option.disabled = Boolean(device.installed_queue);
       select.append(option);
     }
     if (!data.devices.length) {

@@ -11,7 +11,15 @@ def test_add_printer_cancel_buttons_do_not_submit_form() -> None:
     assert '<button class="btn btn-primary" type="submit">Crear impresora</button>' in template
 
 
-def test_static_cache_is_bumped_for_dialog_fix() -> None:
+def test_static_cache_is_current() -> None:
     service_worker = (PACKAGE_DIR / "static" / "sw.js").read_text()
 
-    assert 'const CACHE = "skunk-pc-static-v3";' in service_worker
+    assert 'const CACHE = "skunk-pc-static-v4";' in service_worker
+
+
+def test_add_printer_marks_missing_serials_and_installed_devices() -> None:
+    javascript = (PACKAGE_DIR / "static" / "app.js").read_text()
+
+    assert '"S/N no informado"' in javascript
+    assert "`YA INSTALADA: ${device.installed_queue}`" in javascript
+    assert "option.disabled = Boolean(device.installed_queue)" in javascript

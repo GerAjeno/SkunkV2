@@ -193,7 +193,25 @@ async def api_printers(request: Request):
 @app.get("/api/devices")
 async def api_devices(request: Request):
     require_authenticated(request)
-    devices = [device.as_dict() for device in discover_usb_printers() if device.is_zebra]
+    configured_uris: dict[str, str] = {}
+    for printer in list_printers():
+        configured_uris[printer.uri] = printer.name
+        if printer.physical_uri:
+            configured_uris[printer.physical_uri] = printer.name
+
+    devices = []
+    for device in discover_usb_printers():
+        if not device.is_zebra:
+            continue
+        item = device.as_dict()
+        item["serial_available"] = device.serial.strip().lower() not in {
+            "",
+            "0",
+            "0.0",
+            "unknown",
+        }
+        item["installed_queue"] = configured_uris.get(device.uri)
+        devices.append(item)
     return {"ok": True, "devices": devices}
 
 
