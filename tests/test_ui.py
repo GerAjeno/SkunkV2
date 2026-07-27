@@ -17,7 +17,7 @@ def test_add_printer_cancel_buttons_do_not_submit_form() -> None:
 def test_static_cache_is_current() -> None:
     service_worker = (PACKAGE_DIR / "static" / "sw.js").read_text()
 
-    assert 'const CACHE = "skunk-pc-static-v11";' in service_worker
+    assert 'const CACHE = "skunk-pc-static-v12";' in service_worker
 
 
 def test_add_printer_marks_missing_serials_and_installed_devices() -> None:
@@ -60,6 +60,13 @@ def test_print_form_survives_async_submission() -> None:
     assert "form.reset();" in javascript
     assert "event.currentTarget.reset();" not in javascript
     assert 'message.className = "form-message error";' in javascript
+
+
+def test_job_time_uses_24_hour_clock() -> None:
+    javascript = (PACKAGE_DIR / "static" / "app.js").read_text()
+
+    assert 'hourCycle: "h23"' in javascript
+    assert 'second: "2-digit"' in javascript
 
 
 def test_printer_management_actions_are_available() -> None:

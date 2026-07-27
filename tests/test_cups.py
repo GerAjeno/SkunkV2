@@ -5,6 +5,7 @@ import pytest
 import skunk_pc.cups as cups
 from skunk_pc.cups import (
     CommandResult,
+    _attach_native_origins,
     _ppd_identity,
     list_cups_jobs,
     _selected_ppd_choice,
@@ -245,6 +246,33 @@ def test_list_cups_jobs_reports_native_origin_and_error(monkeypatch) -> None:
     assert jobs[0]["status"] == "failed"
     assert jobs[0]["error"] == "No pages were found."
     assert jobs[1]["status"] == "completed"
+
+
+def test_attach_native_origins_replaces_unknown_with_client_ip(monkeypatch) -> None:
+    monkeypatch.setattr(
+        cups,
+        "run_admin_helper",
+        lambda *_args: (
+            '[{"printer_name":"Zima","client_ip":"10.1.0.225",'
+            '"created_at":"2026-07-27T18:00:04+00:00"}]'
+        ),
+    )
+    native_jobs = [
+        {
+            "printer_name": "Zima",
+            "source_device": "CUPS nativo · unknown",
+            "created_at": "2026-07-27T18:00:04+00:00",
+        }
+    ]
+
+    _attach_native_origins(native_jobs)
+
+    assert native_jobs[0]["source_device"] == "IP 10.1.0.225"
+
+
+def test_job_origins_is_an_allowed_admin_action() -> None:
+    with pytest.raises(cups.CupsError, match="servicio administrativo"):
+        cups.run_admin_helper("job-origins")
 
 
 def test_diagnose_ignores_failed_job_left_in_not_completed(monkeypatch) -> None:

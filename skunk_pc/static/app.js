@@ -112,7 +112,15 @@ function renderJobs(jobs) {
         <td>${escapeHtml(job.printer_name)}</td>
         <td><span class="job-state ${escapeHtml(job.status)}">${escapeHtml(labels[job.status] || job.status)}</span>${error}</td>
         <td>${escapeHtml(job.pages)}</td>
-        <td>${date.toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" })}</td>
+        <td>${date.toLocaleString("es-CL", {
+          year: "2-digit",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hourCycle: "h23"
+        })}</td>
       </tr>`;
   }).join("");
 }

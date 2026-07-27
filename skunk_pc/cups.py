@@ -429,7 +429,54 @@ def list_cups_jobs(limit: int = 100) -> list[dict]:
         else:
             job["status"] = "queued"
             job["error"] = None
+    _attach_native_origins(jobs)
     return jobs[: min(max(limit, 1), 500)]
+
+
+def _attach_native_origins(jobs: list[dict]) -> None:
+    try:
+        response = run_admin_helper("job-origins")
+        events = json.loads(response)
+    except (CupsError, json.JSONDecodeError):
+        return
+    if not isinstance(events, list):
+        return
+
+    available: list[tuple[dict, datetime]] = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        try:
+            event_time = datetime.fromisoformat(str(event["created_at"]))
+        except (KeyError, ValueError):
+            continue
+        available.append((event, event_time))
+
+    used: set[int] = set()
+    for job in jobs:
+        try:
+            job_time = datetime.fromisoformat(job["created_at"])
+        except (KeyError, ValueError):
+            continue
+        candidates = [
+            (abs((event_time - job_time).total_seconds()), index, event)
+            for index, (event, event_time) in enumerate(available)
+            if index not in used
+            and event.get("printer_name") == job["printer_name"]
+            and abs((event_time - job_time).total_seconds()) <= 10
+        ]
+        if not candidates:
+            continue
+        _, index, event = min(candidates, key=lambda item: item[0])
+        used.add(index)
+        client_ip = str(event.get("client_ip") or "").strip()
+        if not client_ip:
+            continue
+        owner = job["source_device"].removeprefix("CUPS nativo · ").strip()
+        if owner.lower() in {"", "unknown", "desconocido"}:
+            job["source_device"] = f"IP {client_ip}"
+        else:
+            job["source_device"] = f"{owner} · IP {client_ip}"
 
 
 def diagnose_printer(printer_name: str) -> str:
@@ -571,6 +618,7 @@ def calibrate(printer_name: str) -> None:
 def run_admin_helper(action: str, *arguments: str) -> str:
     allowed_actions = {
         "devices",
+        "job-origins",
         "add",
         "repair",
         "delete",
@@ -589,7 +637,7 @@ def run_admin_helper(action: str, *arguments: str) -> str:
         client.connect(str(settings.admin_socket))
         client.sendall(request + b"\n")
         response = bytearray()
-        while len(response) <= 65536:
+        while len(response) <= 262144:
             chunk = client.recv(4096)
             if not chunk:
                 break

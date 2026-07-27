@@ -4,7 +4,10 @@ import json
 import os
 import signal
 import socket
+import re
+from datetime import datetime
 from pathlib import Path
+from urllib.parse import unquote
 
 from .cups import (
     CupsError,
@@ -18,6 +21,12 @@ from .cups import (
 
 SOCKET_PATH = Path(os.getenv("SKUNK_ADMIN_SOCKET", "/run/skunk-pc/admin.sock"))
 running = True
+ACCESS_LOG = Path("/var/log/cups/access_log")
+PRINT_JOB_RE = re.compile(
+    r'^(?P<host>\S+)\s+.*?\[(?P<time>[^\]]+)\]\s+'
+    r'"POST\s+/printers/(?P<printer>[^?\s]+).*?"\s+\d+\s+\d+\s+'
+    r'Print-Job\s+'
+)
 
 
 def _stop(_signum: int, _frame: object) -> None:
@@ -42,6 +51,41 @@ def _validate_uri(uri: str) -> str:
         return uri
     validate_network_uri(uri)
     return uri
+
+
+def _native_job_origins(path: Path = ACCESS_LOG) -> list[dict[str, str]]:
+    """Read recent native Print-Job clients without exposing the full log."""
+    try:
+        with path.open("rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            size = handle.tell()
+            handle.seek(max(0, size - 2 * 1024 * 1024))
+            if size > 2 * 1024 * 1024:
+                handle.readline()
+            lines = handle.read().decode("utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+
+    events: list[dict[str, str]] = []
+    for line in lines:
+        match = PRINT_JOB_RE.match(line)
+        if not match:
+            continue
+        try:
+            created_at = datetime.strptime(
+                match.group("time"),
+                "%d/%b/%Y:%H:%M:%S %z",
+            ).isoformat()
+        except ValueError:
+            continue
+        events.append(
+            {
+                "printer_name": unquote(match.group("printer")),
+                "client_ip": match.group("host"),
+                "created_at": created_at,
+            }
+        )
+    return events[-300:]
 
 
 def _configure(name: str, uri: str, language: str, media_type: str) -> None:
@@ -91,6 +135,10 @@ def _configure(name: str, uri: str, language: str, media_type: str) -> None:
 
 
 def dispatch(action: str, arguments: list[str]) -> str:
+    if action == "job-origins":
+        if arguments:
+            raise CupsError("La consulta de orígenes no acepta parámetros")
+        return json.dumps(_native_job_origins())
     if action == "devices":
         if arguments:
             raise CupsError("La consulta de dispositivos no acepta parámetros")
