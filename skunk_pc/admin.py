@@ -101,6 +101,7 @@ def dispatch(action: str, arguments: list[str]) -> str:
             raise CupsError("Parámetros administrativos incompletos")
         name, uri, language, media_type = arguments
         _configure(name, uri, language, media_type)
+        cups_media_type = "Thermal" if media_type == "thermal" else "Direct"
         return (
             f"Impresora {name} configurada en 4×6, 203 DPI, "
             f"{language.upper()}, {cups_media_type} y URI estable"

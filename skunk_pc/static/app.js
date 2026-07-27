@@ -249,6 +249,11 @@ $("#add-printer-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
   const message = $("#add-message");
+  const submit = $("#add-printer-submit");
+  submit.disabled = true;
+  submit.textContent = "Creando…";
+  message.textContent = "Configurando la impresora…";
+  message.className = "form-message";
   try {
     const data = await api("/api/printers", {
       method: "POST",
@@ -261,6 +266,9 @@ $("#add-printer-form")?.addEventListener("submit", async (event) => {
   } catch (error) {
     message.textContent = error.message;
     message.className = "form-message error";
+  } finally {
+    submit.disabled = false;
+    submit.textContent = "Crear impresora";
   }
 });
 
