@@ -156,6 +156,17 @@ Este comando:
 La impresora Zebra debe quedar marcada como compartida para que aparezca en el
 diálogo de impresión de Android/iPhone.
 
+## Historial de impresión
+
+La aplicación conserva durante 30 días los trabajos enviados desde la web y
+los trabajos nativos recibidos por CUPS. El worker sincroniza CUPS cada 10
+segundos y elimina cada hora solamente los registros terminales que superan la
+retención; nunca elimina trabajos en cola o en procesamiento.
+
+El panel muestra 30, 50 o 100 trabajos por página y permite filtrar por fecha,
+impresora, IP/origen y resultado. La retención puede personalizarse mediante
+`SKUNK_JOB_RETENTION_HOURS`.
+
 ## Seguridad
 
 Esta versión no:

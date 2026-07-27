@@ -17,7 +17,7 @@ def test_add_printer_cancel_buttons_do_not_submit_form() -> None:
 def test_static_cache_is_current() -> None:
     service_worker = (PACKAGE_DIR / "static" / "sw.js").read_text()
 
-    assert 'const CACHE = "skunk-pc-static-v12";' in service_worker
+    assert 'const CACHE = "skunk-pc-static-v13";' in service_worker
 
 
 def test_add_printer_marks_missing_serials_and_installed_devices() -> None:
@@ -67,6 +67,23 @@ def test_job_time_uses_24_hour_clock() -> None:
 
     assert 'hourCycle: "h23"' in javascript
     assert 'second: "2-digit"' in javascript
+
+
+def test_job_history_has_filters_page_sizes_and_navigation() -> None:
+    template = (PACKAGE_DIR / "templates" / "index.html").read_text()
+    javascript = (PACKAGE_DIR / "static" / "app.js").read_text()
+
+    assert 'id="jobs-page-size"' in template
+    assert '<option value="30">30</option>' in template
+    assert '<option value="50">50</option>' in template
+    assert '<option value="100">100</option>' in template
+    assert 'id="jobs-date-from"' in template
+    assert 'id="jobs-printer"' in template
+    assert 'id="jobs-origin"' in template
+    assert 'id="jobs-result"' in template
+    assert 'id="jobs-previous"' in template
+    assert 'id="jobs-next"' in template
+    assert 'page_size: $("#jobs-page-size").value' in javascript
 
 
 def test_printer_management_actions_are_available() -> None:

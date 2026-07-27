@@ -36,6 +36,21 @@ CREATE TABLE IF NOT EXISTS jobs (
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status_created
 ON jobs(status, created_at);
+
+CREATE TABLE IF NOT EXISTS print_history (
+    id TEXT PRIMARY KEY,
+    printer_name TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    source_device TEXT NOT NULL,
+    status TEXT NOT NULL,
+    pages INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_print_history_created
+ON print_history(created_at);
 """
 
 

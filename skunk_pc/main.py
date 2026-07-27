@@ -224,10 +224,37 @@ async def api_devices(request: Request):
 
 
 @app.get("/api/jobs")
-async def api_jobs(request: Request, limit: int = 30):
+async def api_jobs(
+    request: Request,
+    page: int = 1,
+    page_size: int = 30,
+    printer: str = "",
+    result: str = "",
+    origin: str = "",
+    created_after: str = "",
+    created_before: str = "",
+):
     require_authenticated(request)
-    jobs = await asyncio.to_thread(list_all_jobs, limit)
-    return {"ok": True, "jobs": jobs}
+    if result and result not in {
+        "queued",
+        "processing",
+        "submitted",
+        "completed",
+        "failed",
+        "cancelled",
+    }:
+        raise HTTPException(status_code=400, detail="Resultado inválido")
+    history = await asyncio.to_thread(
+        list_all_jobs,
+        page=page,
+        page_size=page_size,
+        printer=printer,
+        status=result,
+        origin=origin,
+        created_after=created_after,
+        created_before=created_before,
+    )
+    return {"ok": True, **history}
 
 
 async def _save_upload(upload: UploadFile) -> Path:

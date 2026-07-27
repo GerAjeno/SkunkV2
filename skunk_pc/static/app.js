@@ -48,7 +48,12 @@ function statusBadge(printer) {
 function renderPrinters(printers) {
   const grid = $("#printer-grid");
   const select = $("#printer-select");
+  const historySelect = $("#jobs-printer");
+  const selectedHistoryPrinter = historySelect?.value || "";
   select.innerHTML = '<option value="">Selecciona una impresora</option>';
+  if (historySelect) {
+    historySelect.innerHTML = '<option value="">Todas</option>';
+  }
   if (!printers.length) {
     grid.innerHTML = '<div class="empty-card">No hay impresoras Zebra configuradas.</div>';
     return;
@@ -85,44 +90,83 @@ function renderPrinters(printers) {
     option.value = printer.name;
     option.textContent = printer.description || printer.name;
     select.append(option);
+    if (historySelect) {
+      const historyOption = document.createElement("option");
+      historyOption.value = printer.name;
+      historyOption.textContent = printer.description || printer.name;
+      historySelect.append(historyOption);
+    }
   }
+  if (historySelect) historySelect.value = selectedHistoryPrinter;
 }
 
-function renderJobs(jobs) {
+let jobsPage = 1;
+
+function renderJobs(data) {
+  const jobs = data.jobs;
   const body = $("#jobs-body");
   if (!jobs.length) {
     body.innerHTML = '<tr><td colspan="6" class="muted">Sin trabajos todavía.</td></tr>';
-    return;
+  } else {
+    body.innerHTML = jobs.map((job) => {
+      const date = new Date(job.created_at);
+      const error = job.error ? `<div class="job-error">${escapeHtml(job.error)}</div>` : "";
+      const labels = {
+        queued: "En cola",
+        processing: "Procesando",
+        submitted: "Enviado",
+        completed: "Completado",
+        failed: "Error",
+        cancelled: "Cancelado"
+      };
+      return `
+        <tr>
+          <td>${escapeHtml(job.original_name)}</td>
+          <td>${escapeHtml(job.source_device || "Origen no informado")}</td>
+          <td>${escapeHtml(job.printer_name)}</td>
+          <td><span class="job-state ${escapeHtml(job.status)}">${escapeHtml(labels[job.status] || job.status)}</span>${error}</td>
+          <td>${escapeHtml(job.pages)}</td>
+          <td>${date.toLocaleString("es-CL", {
+            year: "2-digit",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hourCycle: "h23"
+          })}</td>
+        </tr>`;
+    }).join("");
   }
-  body.innerHTML = jobs.map((job) => {
-    const date = new Date(job.created_at);
-    const error = job.error ? `<div class="job-error">${escapeHtml(job.error)}</div>` : "";
-    const labels = {
-      queued: "En cola",
-      processing: "Procesando",
-      submitted: "Enviado",
-      completed: "Completado",
-      failed: "Error",
-      cancelled: "Cancelado"
-    };
-    return `
-      <tr>
-        <td>${escapeHtml(job.original_name)}</td>
-        <td>${escapeHtml(job.source_device || "Origen no informado")}</td>
-        <td>${escapeHtml(job.printer_name)}</td>
-        <td><span class="job-state ${escapeHtml(job.status)}">${escapeHtml(labels[job.status] || job.status)}</span>${error}</td>
-        <td>${escapeHtml(job.pages)}</td>
-        <td>${date.toLocaleString("es-CL", {
-          year: "2-digit",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hourCycle: "h23"
-        })}</td>
-      </tr>`;
-  }).join("");
+  jobsPage = data.page;
+  $("#jobs-summary").textContent = `${data.total} trabajo${data.total === 1 ? "" : "s"}`;
+  $("#jobs-page-label").textContent = `Página ${data.page} de ${data.pages}`;
+  $("#jobs-previous").disabled = data.page <= 1;
+  $("#jobs-next").disabled = data.page >= data.pages;
+}
+
+function jobsQuery() {
+  const query = new URLSearchParams({
+    page: String(jobsPage),
+    page_size: $("#jobs-page-size").value,
+  });
+  const printer = $("#jobs-printer").value;
+  const result = $("#jobs-result").value;
+  const origin = $("#jobs-origin").value.trim();
+  const dateFrom = $("#jobs-date-from").value;
+  const dateTo = $("#jobs-date-to").value;
+  if (printer) query.set("printer", printer);
+  if (result) query.set("result", result);
+  if (origin) query.set("origin", origin);
+  if (dateFrom) {
+    query.set("created_after", new Date(`${dateFrom}T00:00:00`).toISOString());
+  }
+  if (dateTo) {
+    const before = new Date(`${dateTo}T00:00:00`);
+    before.setDate(before.getDate() + 1);
+    query.set("created_before", before.toISOString());
+  }
+  return query.toString();
 }
 
 let refreshInProgress = false;
@@ -133,7 +177,7 @@ async function refresh() {
     const [status, printers, jobs] = await Promise.all([
       api("/api/status"),
       api("/api/printers"),
-      api("/api/jobs?limit=30")
+      api(`/api/jobs?${jobsQuery()}`)
     ]);
     $("#cups-badge").textContent = status.cups ? "CUPS ACTIVO" : "CUPS CAÍDO";
     $("#cups-badge").className = `status-pill ${status.cups ? "ready" : "danger"}`;
@@ -141,7 +185,7 @@ async function refresh() {
     $("#metric-ready").textContent = `${status.ready_count} listas para imprimir`;
     $("#metric-foreign").textContent = status.foreign_count;
     renderPrinters(printers.printers);
-    renderJobs(jobs.jobs);
+    renderJobs(jobs);
   } catch (error) {
     toast(error.message);
   } finally {
@@ -334,6 +378,34 @@ $("#add-printer-form")?.addEventListener("submit", async (event) => {
 });
 
 $("#refresh-button")?.addEventListener("click", refresh);
+
+$("#job-filters")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  jobsPage = 1;
+  await refresh();
+});
+
+$("#jobs-page-size")?.addEventListener("change", async () => {
+  jobsPage = 1;
+  await refresh();
+});
+
+$("#jobs-clear-filters")?.addEventListener("click", async () => {
+  $("#job-filters").reset();
+  jobsPage = 1;
+  await refresh();
+});
+
+$("#jobs-previous")?.addEventListener("click", async () => {
+  if (jobsPage <= 1) return;
+  jobsPage -= 1;
+  await refresh();
+});
+
+$("#jobs-next")?.addEventListener("click", async () => {
+  jobsPage += 1;
+  await refresh();
+});
 
 $("#theme-toggle")?.addEventListener("click", () => {
   const current = document.documentElement.dataset.theme || "dark";

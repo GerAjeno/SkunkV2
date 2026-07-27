@@ -127,6 +127,48 @@
         </div>
         <button id="refresh-button" class="btn btn-quiet" type="button">Actualizar</button>
       </div>
+      <form id="job-filters" class="job-filters">
+        <label>
+          Desde
+          <input id="jobs-date-from" type="date">
+        </label>
+        <label>
+          Hasta
+          <input id="jobs-date-to" type="date">
+        </label>
+        <label>
+          Impresora
+          <select id="jobs-printer">
+            <option value="">Todas</option>
+          </select>
+        </label>
+        <label>
+          Origen o IP
+          <input id="jobs-origin" type="search" placeholder="Ej. 10.1.0.225">
+        </label>
+        <label>
+          Resultado
+          <select id="jobs-result">
+            <option value="">Todos</option>
+            <option value="completed">Completados</option>
+            <option value="failed">Con error</option>
+            <option value="queued">En cola</option>
+            <option value="processing">Procesando</option>
+            <option value="submitted">Enviados</option>
+            <option value="cancelled">Cancelados</option>
+          </select>
+        </label>
+        <label>
+          Por página
+          <select id="jobs-page-size">
+            <option value="30">30</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </label>
+        <button class="btn btn-secondary" type="submit">Filtrar</button>
+        <button id="jobs-clear-filters" class="btn btn-quiet" type="button">Limpiar</button>
+      </form>
       <div class="table-wrap">
         <table>
           <thead>
@@ -136,6 +178,14 @@
             <tr><td colspan="6" class="muted">Sin trabajos todavía.</td></tr>
           </tbody>
         </table>
+      </div>
+      <div class="jobs-pagination">
+        <span id="jobs-summary">0 trabajos</span>
+        <div>
+          <button id="jobs-previous" class="btn btn-quiet" type="button">Anterior</button>
+          <span id="jobs-page-label">Página 1 de 1</span>
+          <button id="jobs-next" class="btn btn-quiet" type="button">Siguiente</button>
+        </div>
       </div>
     </section>
   </main>

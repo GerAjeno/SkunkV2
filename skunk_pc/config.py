@@ -42,7 +42,7 @@ class Settings:
             password_hash=os.getenv("SKUNK_PASSWORD_HASH", ""),
             dev_auth_bypass=_as_bool(os.getenv("SKUNK_DEV_AUTH_BYPASS")),
             max_upload_mb=int(os.getenv("SKUNK_MAX_UPLOAD_MB", "30")),
-            job_retention_hours=int(os.getenv("SKUNK_JOB_RETENTION_HOURS", "24")),
+            job_retention_hours=int(os.getenv("SKUNK_JOB_RETENTION_HOURS", "720")),
             admin_socket=Path(
                 os.getenv("SKUNK_ADMIN_SOCKET", "/run/skunk-pc/admin.sock")
             ),

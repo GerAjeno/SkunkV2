@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from .config import settings
@@ -67,12 +67,89 @@ def list_jobs(limit: int = 30) -> list[dict]:
     return [dict(row) for row in rows]
 
 
-def list_all_jobs(limit: int = 30) -> list[dict]:
-    """Combine jobs created in the web UI with native IPP/CUPS jobs."""
-    limit = min(max(limit, 1), 100)
-    web_jobs = list_jobs(100)
-    cups_jobs = list_cups_jobs(200)
-    cups_by_id = {job["cups_job_id"]: job for job in cups_jobs}
+def sync_cups_history() -> None:
+    cups_jobs = list_cups_jobs(500)
+    if not cups_jobs:
+        return
+    now = utc_now()
+    with connect() as db:
+        for job in cups_jobs:
+            db.execute(
+                """
+                INSERT INTO print_history (
+                    id, printer_name, original_name, source_device, status,
+                    pages, error, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    printer_name = excluded.printer_name,
+                    original_name = excluded.original_name,
+                    source_device = excluded.source_device,
+                    status = excluded.status,
+                    pages = excluded.pages,
+                    error = excluded.error,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    job["cups_job_id"],
+                    job["printer_name"],
+                    job["original_name"],
+                    job["source_device"],
+                    job["status"],
+                    job.get("pages", 0),
+                    job.get("error"),
+                    job["created_at"],
+                    now,
+                ),
+            )
+        db.commit()
+
+
+def cleanup_history() -> None:
+    cutoff = (
+        datetime.now(UTC) - timedelta(hours=max(settings.job_retention_hours, 1))
+    ).isoformat()
+    with connect() as db:
+        db.execute("DELETE FROM print_history WHERE created_at < ?", (cutoff,))
+        db.execute(
+            """
+            DELETE FROM jobs
+            WHERE created_at < ?
+              AND status NOT IN ('queued', 'processing')
+            """,
+            (cutoff,),
+        )
+        db.commit()
+
+
+def list_all_jobs(
+    *,
+    page: int = 1,
+    page_size: int = 30,
+    printer: str = "",
+    status: str = "",
+    origin: str = "",
+    created_after: str = "",
+    created_before: str = "",
+) -> dict:
+    """Return a filtered page combining web and persisted native jobs."""
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 100)
+    sync_cups_history()
+    cleanup_history()
+    with connect() as db:
+        web_jobs = [
+            dict(row)
+            for row in db.execute(
+                "SELECT * FROM jobs ORDER BY created_at DESC"
+            ).fetchall()
+        ]
+        cups_jobs = [
+            dict(row)
+            for row in db.execute(
+                "SELECT * FROM print_history ORDER BY created_at DESC"
+            ).fetchall()
+        ]
+    cups_by_id = {job["id"]: job for job in cups_jobs}
     represented_ids: set[str] = set()
 
     for job in web_jobs:
@@ -93,27 +170,54 @@ def list_all_jobs(limit: int = 30) -> list[dict]:
                 job["status"] = "processing"
         job["source"] = "web"
 
-    native_jobs = [
-        {
-            "id": f"cups:{job['cups_job_id']}",
-            "original_name": job["original_name"],
-            "printer_name": job["printer_name"],
-            "status": job["status"],
-            "pages": job.get("pages", 0),
-            "created_at": job["created_at"],
-            "error": job.get("error"),
-            "source_device": job["source_device"],
-            "source": "native",
-        }
-        for job in cups_jobs
-        if job["cups_job_id"] not in represented_ids
-    ]
+    native_jobs = []
+    for job in cups_jobs:
+        if job["id"] in represented_ids:
+            continue
+        native_jobs.append(
+            {
+                "id": f"cups:{job['id']}",
+                "original_name": job["original_name"],
+                "printer_name": job["printer_name"],
+                "status": job["status"],
+                "pages": job.get("pages", 0),
+                "created_at": job["created_at"],
+                "error": job.get("error"),
+                "source_device": job["source_device"],
+                "source": "native",
+            }
+        )
     combined = web_jobs + native_jobs
+    printer_filter = printer.casefold().strip()
+    status_filter = status.casefold().strip()
+    origin_filter = origin.casefold().strip()
+    combined = [
+        job
+        for job in combined
+        if (not printer_filter or job["printer_name"].casefold() == printer_filter)
+        and (not status_filter or job["status"].casefold() == status_filter)
+        and (
+            not origin_filter
+            or origin_filter in (job.get("source_device") or "").casefold()
+        )
+        and (not created_after or job["created_at"] >= created_after)
+        and (not created_before or job["created_at"] < created_before)
+    ]
     combined.sort(
         key=lambda job: _sortable_datetime(job.get("created_at")),
         reverse=True,
     )
-    return combined[:limit]
+    total = len(combined)
+    pages = max(1, (total + page_size - 1) // page_size)
+    page = min(page, pages)
+    start = (page - 1) * page_size
+    return {
+        "jobs": combined[start : start + page_size],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "pages": pages,
+    }
 
 
 def _sortable_datetime(value: object) -> datetime:

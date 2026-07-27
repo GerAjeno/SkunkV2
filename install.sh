@@ -93,7 +93,7 @@ SKUNK_DATA_DIR=${data_dir}
 SKUNK_SESSION_SECRET=${session_secret}
 SKUNK_PASSWORD_HASH=${password_hash}
 SKUNK_MAX_UPLOAD_MB=30
-SKUNK_JOB_RETENTION_HOURS=24
+SKUNK_JOB_RETENTION_HOURS=720
 SKUNK_ADMIN_SOCKET=/run/skunk-pc/admin.sock
 EOF
 chown root:"$service_user" "${config_dir}/skunk.env"

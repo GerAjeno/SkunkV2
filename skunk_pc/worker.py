@@ -9,7 +9,13 @@ from .config import settings
 from .converter import ConversionError, convert_document
 from .cups import CupsError, get_printer, submit_file
 from .database import init_database
-from .jobs import claim_next_job, finish_job, remove_job_files
+from .jobs import (
+    claim_next_job,
+    cleanup_history,
+    finish_job,
+    remove_job_files,
+    sync_cups_history,
+)
 
 
 logging.basicConfig(
@@ -74,7 +80,22 @@ def main() -> None:
     signal.signal(signal.SIGTERM, stop_worker)
     signal.signal(signal.SIGINT, stop_worker)
     log.info("Worker iniciado")
+    next_history_sync = 0.0
+    next_cleanup = 0.0
     while running:
+        now = time.monotonic()
+        if now >= next_history_sync:
+            try:
+                sync_cups_history()
+            except Exception:
+                log.exception("No se pudo sincronizar el historial CUPS")
+            next_history_sync = now + 10
+        if now >= next_cleanup:
+            try:
+                cleanup_history()
+            except Exception:
+                log.exception("No se pudo limpiar el historial antiguo")
+            next_cleanup = now + 3600
         job = claim_next_job()
         if job is None:
             time.sleep(1.5)

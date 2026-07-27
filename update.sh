@@ -31,6 +31,13 @@ new_commit="$(git rev-parse --short HEAD)"
 echo "La fase administrativa realizará un respaldo y reiniciará solo Skunk PC."
 sudo -v
 
+# Migrate the original one-day history setting to the current 30-day default.
+# Preserve any value explicitly customized by the administrator.
+if sudo grep -qx 'SKUNK_JOB_RETENTION_HOURS=24' /etc/skunk-pc/skunk.env; then
+    sudo sed -i 's/^SKUNK_JOB_RETENTION_HOURS=24$/SKUNK_JOB_RETENTION_HOURS=720/' \
+        /etc/skunk-pc/skunk.env
+fi
+
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 backup_dir="/var/backups/skunk-pc/update-${timestamp}"
 staging_dir="$(sudo mktemp -d /opt/skunk-pc/app.update.XXXXXX)"
