@@ -283,7 +283,13 @@ def list_printers(*, include_non_zebra: bool = False) -> list[Printer]:
                 is_zebra=is_zebra,
                 language=language,
                 dpi=_parse_dpi(options.get("Resolution", "203dpi")),
-                page_size=options.get("PageSize", options.get("media", "desconocido")),
+                page_size=options.get(
+                    "PageSize",
+                    options.get(
+                        "media",
+                        _selected_ppd_choice(choices, "PageSize") or "desconocido",
+                    ),
+                ),
                 media_type=(
                     "thermal"
                     if _selected_ppd_choice(choices, "MediaType").lower() == "thermal"
@@ -327,11 +333,22 @@ def diagnose_printer(printer_name: str) -> str:
     pending_result = run_command(
         ["lpstat", "-W", "not-completed", "-o", printer.name],
     )
-    pending_jobs = [
-        line
-        for line in pending_result.stdout.splitlines()
+    completed_result = run_command(
+        ["lpstat", "-W", "completed", "-o", printer.name],
+    )
+    completed_ids = {
+        line.split(maxsplit=1)[0]
+        for line in completed_result.stdout.splitlines()
         if line.strip()
-    ] if pending_result.returncode == 0 else []
+    } if completed_result.returncode == 0 else set()
+    pending_jobs = []
+    if pending_result.returncode == 0:
+        for line in pending_result.stdout.splitlines():
+            if not line.strip():
+                continue
+            job_id = line.split(maxsplit=1)[0]
+            if job_id not in completed_ids:
+                pending_jobs.append(line)
     details.append(f"Trabajos pendientes: {len(pending_jobs)}")
     if pending_jobs:
         problems.append(

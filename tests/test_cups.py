@@ -169,11 +169,12 @@ def test_diagnose_printer_reports_pending_jobs_and_usb_limit(monkeypatch) -> Non
         media_type="thermal",
     )
     monkeypatch.setattr(cups, "get_printer", lambda _name: printer)
-    monkeypatch.setattr(
-        cups,
-        "run_command",
-        lambda _args: CommandResult(0, "Gabriela-20 user 1024 today", ""),
-    )
+    def fake_run_command(arguments):
+        if "not-completed" in arguments:
+            return CommandResult(0, "Gabriela-20 user 1024 today", "")
+        return CommandResult(0, "", "")
+
+    monkeypatch.setattr(cups, "run_command", fake_run_command)
 
     message = diagnose_printer("Gabriela")
 
@@ -182,3 +183,33 @@ def test_diagnose_printer_reports_pending_jobs_and_usb_limit(monkeypatch) -> Non
     assert "Resolución: 203 DPI" in message
     assert "Formato: 4×6" in message
     assert "USB es unidireccional" in message
+
+
+def test_diagnose_ignores_completed_job_reported_as_not_completed(monkeypatch) -> None:
+    printer = Printer(
+        name="Planchetta",
+        uri="usb://Zebra/TLP2844?serial=ABC",
+        description="Planchetta",
+        make_model="Zebra EPL2",
+        state="idle",
+        state_message="idle",
+        connected=True,
+        is_zebra=True,
+        language="epl2",
+        dpi=203,
+        page_size="w288h432",
+        media_type="thermal",
+    )
+    monkeypatch.setattr(cups, "get_printer", lambda _name: printer)
+
+    def fake_run_command(arguments):
+        if "not-completed" in arguments or "completed" in arguments:
+            return CommandResult(0, "Planchetta-4 user 1024 today", "")
+        return CommandResult(0, "", "")
+
+    monkeypatch.setattr(cups, "run_command", fake_run_command)
+
+    message = diagnose_printer("Planchetta")
+
+    assert "No se detectaron problemas de software" in message
+    assert "Trabajos pendientes: 0" in message

@@ -17,7 +17,7 @@ def test_add_printer_cancel_buttons_do_not_submit_form() -> None:
 def test_static_cache_is_current() -> None:
     service_worker = (PACKAGE_DIR / "static" / "sw.js").read_text()
 
-    assert 'const CACHE = "skunk-pc-static-v9";' in service_worker
+    assert 'const CACHE = "skunk-pc-static-v10";' in service_worker
 
 
 def test_add_printer_marks_missing_serials_and_installed_devices() -> None:
