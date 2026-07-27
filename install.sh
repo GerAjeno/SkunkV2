@@ -26,7 +26,7 @@ apt-get update
 apt-get install -y \
     cups cups-client cups-filters avahi-daemon avahi-utils \
     python3 python3-venv python3-pip poppler-utils ghostscript \
-    fonts-dejavu-core colord
+    fonts-dejavu-core colord btop
 
 # A newly installed colord policy is not necessarily picked up by an already
 # running system D-Bus daemon.  Without this reload, every raster conversion
@@ -102,11 +102,15 @@ chmod 0640 "${config_dir}/skunk.env"
 install -m 0644 "${source_dir}/deploy/skunk-admin.service" /etc/systemd/system/
 install -m 0644 "${source_dir}/deploy/skunk-api.service" /etc/systemd/system/
 install -m 0644 "${source_dir}/deploy/skunk-worker.service" /etc/systemd/system/
+install -m 0644 "${source_dir}/deploy/skunk-console.service" /etc/systemd/system/
 install -m 0755 "${source_dir}/scripts/activate-native-printing.sh" \
     /usr/local/sbin/skunk-activate-native-printing
 
 systemctl daemon-reload
-systemctl enable --now skunk-admin.service skunk-worker.service skunk-api.service
+systemctl disable --now getty@tty1.service 2>/dev/null || true
+systemctl enable --now \
+    skunk-admin.service skunk-worker.service skunk-api.service \
+    skunk-console.service
 
 server_ip="$(hostname -I | awk '{print $1}')"
 echo

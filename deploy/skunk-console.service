@@ -1,0 +1,36 @@
+[Unit]
+Description=Skunk PC - Monitor btop en consola local
+After=systemd-user-sessions.service skunk-api.service
+Wants=skunk-api.service
+Conflicts=getty@tty1.service
+Before=getty@tty1.service
+
+[Service]
+Type=simple
+User=skunkpc
+Group=skunkpc
+Environment=HOME=/var/lib/skunk-pc
+Environment=TERM=linux
+WorkingDirectory=/var/lib/skunk-pc
+ExecStart=/usr/bin/btop
+Restart=always
+RestartSec=2
+StandardInput=tty-force
+StandardOutput=tty
+StandardError=journal
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

@@ -43,6 +43,8 @@ backup_dir="/var/backups/skunk-pc/update-${timestamp}"
 staging_dir="$(sudo mktemp -d /opt/skunk-pc/app.update.XXXXXX)"
 sudo chmod 0755 "$staging_dir"
 swapped=0
+console_service_existed=0
+getty_was_enabled="$(sudo systemctl is-enabled getty@tty1.service 2>/dev/null || true)"
 
 cleanup() {
     if [[ -n "${staging_dir:-}" && "$staging_dir" == /opt/skunk-pc/app.update.* ]]; then
@@ -68,6 +70,18 @@ rollback() {
         sudo systemctl daemon-reload
         sudo systemctl restart skunk-admin skunk-worker skunk-api || true
     fi
+    if (( console_service_existed == 1 )); then
+        sudo cp "$backup_dir/skunk-console.service" \
+            /etc/systemd/system/skunk-console.service
+        sudo systemctl daemon-reload
+        sudo systemctl restart skunk-console.service || true
+    else
+        sudo systemctl disable --now skunk-console.service 2>/dev/null || true
+        sudo rm -f /etc/systemd/system/skunk-console.service
+        if [[ "$getty_was_enabled" == "enabled" ]]; then
+            sudo systemctl enable --now getty@tty1.service || true
+        fi
+    fi
     cleanup
     exit "$exit_code"
 }
@@ -81,6 +95,11 @@ sudo cp -a \
     /etc/systemd/system/skunk-worker.service \
     /etc/systemd/system/skunk-api.service \
     "$backup_dir/services/"
+if [[ -f /etc/systemd/system/skunk-console.service ]]; then
+    sudo cp -a /etc/systemd/system/skunk-console.service \
+        "$backup_dir/skunk-console.service"
+    console_service_existed=1
+fi
 if [[ -f /usr/local/sbin/skunk-activate-native-printing ]]; then
     sudo cp -a /usr/local/sbin/skunk-activate-native-printing "$backup_dir/"
 fi
@@ -95,6 +114,7 @@ sudo /opt/skunk-pc/venv/bin/pip install "$staging_dir"
 sudo install -m 0644 deploy/skunk-admin.service /etc/systemd/system/
 sudo install -m 0644 deploy/skunk-worker.service /etc/systemd/system/
 sudo install -m 0644 deploy/skunk-api.service /etc/systemd/system/
+sudo install -m 0644 deploy/skunk-console.service /etc/systemd/system/
 sudo install -m 0755 scripts/activate-native-printing.sh \
     /usr/local/sbin/skunk-activate-native-printing
 
@@ -104,7 +124,13 @@ staging_dir=""
 swapped=1
 
 sudo systemctl daemon-reload
-sudo systemctl restart skunk-admin skunk-worker skunk-api
+if ! command -v btop >/dev/null 2>&1; then
+    sudo apt-get update
+    sudo apt-get install -y btop
+fi
+sudo systemctl disable --now getty@tty1.service 2>/dev/null || true
+sudo systemctl enable skunk-console.service
+sudo systemctl restart skunk-admin skunk-worker skunk-api skunk-console
 
 port="$(sudo sed -n 's/^SKUNK_PORT=//p' /etc/skunk-pc/skunk.env)"
 if [[ ! "$port" =~ ^[0-9]+$ ]]; then
@@ -113,7 +139,8 @@ if [[ ! "$port" =~ ^[0-9]+$ ]]; then
 fi
 healthy=0
 for _attempt in {1..20}; do
-    if sudo systemctl is-active --quiet skunk-admin skunk-worker skunk-api &&
+    if sudo systemctl is-active --quiet \
+           skunk-admin skunk-worker skunk-api skunk-console &&
        curl --fail --silent --output /dev/null \
            "http://127.0.0.1:${port}/login"; then
         healthy=1

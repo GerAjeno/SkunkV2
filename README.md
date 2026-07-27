@@ -167,6 +167,10 @@ El panel muestra 30, 50 o 100 trabajos por página y permite filtrar por fecha,
 impresora, IP/origen y resultado. La retención puede personalizarse mediante
 `SKUNK_JOB_RETENTION_HOURS`.
 
+Al terminar el arranque, `skunk-console.service` abre `btop` automáticamente en
+la consola física `tty1`. Se ejecuta como el usuario restringido `skunkpc`, no
+como root, y reemplaza únicamente el `getty` de esa consola.
+
 ## Seguridad
 
 Esta versión no:
