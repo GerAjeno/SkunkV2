@@ -213,3 +213,39 @@ def test_diagnose_ignores_completed_job_reported_as_not_completed(monkeypatch) -
 
     assert "No se detectaron problemas de software" in message
     assert "Trabajos pendientes: 0" in message
+
+
+def test_diagnose_ignores_failed_job_left_in_not_completed(monkeypatch) -> None:
+    printer = Printer(
+        name="Planchetta",
+        uri="usb://Zebra/TLP2844?serial=ABC",
+        description="Planchetta",
+        make_model="Zebra EPL2",
+        state="idle",
+        state_message="idle",
+        connected=True,
+        is_zebra=True,
+        language="epl2",
+        dpi=203,
+        page_size="w288h432",
+        media_type="thermal",
+    )
+    monkeypatch.setattr(cups, "get_printer", lambda _name: printer)
+
+    def fake_run_command(arguments):
+        if "not-completed" in arguments:
+            return CommandResult(
+                0,
+                "Planchetta-4 user 1024 today\n"
+                "\tAlerts: job-completed-with-errors\n"
+                "\tqueued for Planchetta",
+                "",
+            )
+        return CommandResult(0, "", "")
+
+    monkeypatch.setattr(cups, "run_command", fake_run_command)
+
+    message = diagnose_printer("Planchetta")
+
+    assert "No se detectaron problemas de software" in message
+    assert "Trabajos pendientes: 0" in message

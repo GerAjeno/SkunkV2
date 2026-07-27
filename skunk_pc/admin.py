@@ -121,10 +121,10 @@ def dispatch(action: str, arguments: list[str]) -> str:
             "La impresora no existe",
         )
         require_success(
-            run_command(["cancel", "-a", name]),
+            run_command(["cancel", "-a", "-x", name]),
             "No se pudieron cancelar los trabajos",
         )
-        return f"Trabajos pendientes de {name} eliminados"
+        return f"Trabajos y registros fallidos de {name} eliminados"
     if action == "configure":
         if len(arguments) != 1:
             raise CupsError("Parámetros administrativos incompletos")

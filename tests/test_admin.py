@@ -29,6 +29,6 @@ def test_purge_cancels_all_jobs_without_deleting_printer(monkeypatch) -> None:
 
     assert commands == [
         ["lpstat", "-p", "Gabriela"],
-        ["cancel", "-a", "Gabriela"],
+        ["cancel", "-a", "-x", "Gabriela"],
     ]
-    assert message == "Trabajos pendientes de Gabriela eliminados"
+    assert message == "Trabajos y registros fallidos de Gabriela eliminados"

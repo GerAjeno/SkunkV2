@@ -313,6 +313,37 @@ def cups_running() -> bool:
     return run_command(["lpstat", "-r"]).returncode == 0
 
 
+def _active_job_lines(output: str) -> list[str]:
+    """Return job headers, excluding stale completed jobs exposed by CUPS."""
+    jobs: list[str] = []
+    current_header = ""
+    current_detail: list[str] = []
+
+    def append_current() -> None:
+        if not current_header:
+            return
+        detail = " ".join(current_detail).lower()
+        if not any(
+            marker in detail
+            for marker in (
+                "job-completed-with-errors",
+                "job-completed-successfully",
+                "job-canceled-by-user",
+            )
+        ):
+            jobs.append(current_header)
+
+    for line in output.splitlines():
+        if line and not line[0].isspace():
+            append_current()
+            current_header = line
+            current_detail = []
+        elif current_header:
+            current_detail.append(line.strip())
+    append_current()
+    return jobs
+
+
 def diagnose_printer(printer_name: str) -> str:
     printer = get_printer(printer_name)
     problems: list[str] = []
@@ -331,7 +362,7 @@ def diagnose_printer(printer_name: str) -> str:
         details.append("Estado CUPS: lista")
 
     pending_result = run_command(
-        ["lpstat", "-W", "not-completed", "-o", printer.name],
+        ["lpstat", "-W", "not-completed", "-l", "-o", printer.name],
     )
     completed_result = run_command(
         ["lpstat", "-W", "completed", "-o", printer.name],
@@ -341,14 +372,15 @@ def diagnose_printer(printer_name: str) -> str:
         for line in completed_result.stdout.splitlines()
         if line.strip()
     } if completed_result.returncode == 0 else set()
-    pending_jobs = []
-    if pending_result.returncode == 0:
-        for line in pending_result.stdout.splitlines():
-            if not line.strip():
-                continue
-            job_id = line.split(maxsplit=1)[0]
-            if job_id not in completed_ids:
-                pending_jobs.append(line)
+    pending_jobs = (
+        [
+            line
+            for line in _active_job_lines(pending_result.stdout)
+            if line.split(maxsplit=1)[0] not in completed_ids
+        ]
+        if pending_result.returncode == 0
+        else []
+    )
     details.append(f"Trabajos pendientes: {len(pending_jobs)}")
     if pending_jobs:
         problems.append(
