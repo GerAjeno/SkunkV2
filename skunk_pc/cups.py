@@ -307,6 +307,63 @@ def cups_running() -> bool:
     return run_command(["lpstat", "-r"]).returncode == 0
 
 
+def diagnose_printer(printer_name: str) -> str:
+    printer = get_printer(printer_name)
+    problems: list[str] = []
+    details: list[str] = []
+
+    if printer.connected:
+        details.append("Conexión: dispositivo disponible")
+    else:
+        problems.append("La impresora no está conectada o su URI cambió")
+
+    if printer.state == "stopped":
+        problems.append(f"CUPS detuvo la impresora: {printer.state_message}")
+    elif printer.state == "printing":
+        details.append("Estado CUPS: imprimiendo")
+    else:
+        details.append("Estado CUPS: lista")
+
+    pending_result = run_command(
+        ["lpstat", "-W", "not-completed", "-o", printer.name],
+    )
+    pending_jobs = [
+        line
+        for line in pending_result.stdout.splitlines()
+        if line.strip()
+    ] if pending_result.returncode == 0 else []
+    details.append(f"Trabajos pendientes: {len(pending_jobs)}")
+    if pending_jobs:
+        problems.append(
+            f"Hay {len(pending_jobs)} trabajo(s) pendiente(s) en la cola"
+        )
+
+    if printer.dpi != 203:
+        problems.append(f"Resolución configurada incorrectamente: {printer.dpi} DPI")
+    else:
+        details.append("Resolución: 203 DPI")
+
+    if printer.page_size != "w288h432":
+        problems.append(f"Tamaño configurado incorrectamente: {printer.page_size}")
+    else:
+        details.append("Formato: 4×6")
+
+    heading = (
+        f"Se detectaron {len(problems)} problema(s) en {printer.name}:"
+        if problems
+        else f"No se detectaron problemas de software en {printer.name}."
+    )
+    lines = [heading]
+    lines.extend(f"• {problem}" for problem in problems)
+    lines.extend(f"✓ {detail}" for detail in details)
+    if printer.uri.startswith("usb://"):
+        lines.append(
+            "Nota: el USB es unidireccional; atascos, ribbon, sensor y "
+            "problemas mecánicos deben revisarse físicamente."
+        )
+    return "\n".join(lines)
+
+
 def submit_file(printer_name: str, path: Path, *, copies: int = 1) -> str:
     validate_printer_name(printer_name)
     if not 1 <= copies <= 20:
@@ -375,7 +432,15 @@ def calibrate(printer_name: str) -> None:
 
 
 def run_admin_helper(action: str, *arguments: str) -> str:
-    allowed_actions = {"devices", "add", "repair", "delete", "configure", "enable"}
+    allowed_actions = {
+        "devices",
+        "add",
+        "repair",
+        "delete",
+        "purge",
+        "configure",
+        "enable",
+    }
     if action not in allowed_actions:
         raise CupsError("Acción administrativa inválida")
     request = json.dumps({"action": action, "arguments": list(arguments)}).encode("utf-8")

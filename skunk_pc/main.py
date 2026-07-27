@@ -34,6 +34,7 @@ from .cups import (
     CupsError,
     calibrate,
     cups_running,
+    diagnose_printer,
     discover_usb_printers,
     get_printer,
     list_printers,
@@ -350,6 +351,21 @@ async def api_repair_printer(printer_name: str, request: Request):
         printer.media_type,
     )
     return {"ok": True, "message": output or "URI reparada y cola configurada en 4x6"}
+
+
+@app.post("/api/printers/{printer_name}/diagnose")
+async def api_diagnose_printer(printer_name: str, request: Request):
+    require_csrf(request)
+    message = await asyncio.to_thread(diagnose_printer, printer_name)
+    return {"ok": True, "message": message}
+
+
+@app.post("/api/printers/{printer_name}/purge")
+async def api_purge_printer(printer_name: str, request: Request):
+    require_csrf(request)
+    validate_printer_name(printer_name)
+    output = await asyncio.to_thread(run_admin_helper, "purge", printer_name)
+    return {"ok": True, "message": output or "Cola de impresión vaciada"}
 
 
 @app.post("/api/printers")

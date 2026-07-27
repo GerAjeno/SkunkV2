@@ -7,6 +7,7 @@ from skunk_pc.cups import (
     CommandResult,
     _ppd_identity,
     _selected_ppd_choice,
+    diagnose_printer,
     discover_usb_printers,
     parse_device_uri,
     parse_lpinfo_devices,
@@ -150,3 +151,34 @@ def test_ppd_identifies_broken_zebra_queue(tmp_path: Path) -> None:
     )
     identity = _ppd_identity("Planchetta", ppd_dir=tmp_path)
     assert "Zebra EPL2" in identity
+
+
+def test_diagnose_printer_reports_pending_jobs_and_usb_limit(monkeypatch) -> None:
+    printer = Printer(
+        name="Gabriela",
+        uri="usb://Zebra/TLP2844?serial=0.0",
+        description="Gabriela",
+        make_model="Zebra EPL2",
+        state="idle",
+        state_message="idle",
+        connected=True,
+        is_zebra=True,
+        language="epl2",
+        dpi=203,
+        page_size="w288h432",
+        media_type="thermal",
+    )
+    monkeypatch.setattr(cups, "get_printer", lambda _name: printer)
+    monkeypatch.setattr(
+        cups,
+        "run_command",
+        lambda _args: CommandResult(0, "Gabriela-20 user 1024 today", ""),
+    )
+
+    message = diagnose_printer("Gabriela")
+
+    assert "Hay 1 trabajo(s) pendiente(s)" in message
+    assert "Conexión: dispositivo disponible" in message
+    assert "Resolución: 203 DPI" in message
+    assert "Formato: 4×6" in message
+    assert "USB es unidireccional" in message

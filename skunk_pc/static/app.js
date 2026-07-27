@@ -72,7 +72,10 @@ function renderPrinters(printers) {
       <div class="printer-actions">
         <button class="btn btn-secondary" data-action="test" data-printer="${escapeHtml(printer.name)}">Prueba</button>
         <button class="btn btn-quiet" data-action="calibrate" data-printer="${escapeHtml(printer.name)}">Calibrar</button>
-        <button class="btn btn-warning repair" data-action="repair" data-printer="${escapeHtml(printer.name)}">Reparar y fijar 4×6</button>
+        <button class="btn btn-secondary" data-action="diagnose" data-printer="${escapeHtml(printer.name)}">Diagnosticar</button>
+        <button class="btn btn-warning" data-action="purge" data-printer="${escapeHtml(printer.name)}">Vaciar trabajos</button>
+        <button class="btn btn-warning" data-action="repair" data-printer="${escapeHtml(printer.name)}">Reparar y fijar 4×6</button>
+        <button class="btn btn-danger" data-action="delete" data-printer="${escapeHtml(printer.name)}">Eliminar impresora</button>
       </div>
     </article>
   `).join("");
@@ -185,12 +188,46 @@ $("#printer-grid")?.addEventListener("click", async (event) => {
   if (!button) return;
   const action = button.dataset.action;
   const printer = button.dataset.printer;
-  const labels = { test: "prueba", calibrate: "calibración", repair: "reparación" };
-  if (action === "calibrate" && !window.confirm("La impresora avanzará varias etiquetas. ¿Continuar?")) return;
+  const labels = {
+    test: "prueba",
+    calibrate: "calibración",
+    diagnose: "diagnóstico",
+    purge: "vaciado",
+    repair: "reparación",
+    delete: "eliminación"
+  };
+  if (
+    action === "calibrate" &&
+    !window.confirm("La impresora avanzará varias etiquetas. ¿Continuar?")
+  ) return;
+  if (
+    action === "purge" &&
+    !window.confirm(
+      `Se cancelarán todos los trabajos pendientes de ${printer}. ` +
+      "La impresora y su configuración permanecerán. ¿Continuar?"
+    )
+  ) return;
+  if (
+    action === "delete" &&
+    !window.confirm(
+      `Se eliminará ${printer}, su cola y toda su configuración de CUPS. ` +
+      "Esta acción no elimina otras impresoras. ¿Continuar?"
+    )
+  ) return;
   button.disabled = true;
   try {
-    const data = await api(`/api/printers/${encodeURIComponent(printer)}/${action}`, { method: "POST" });
-    toast(data.message || `${labels[action]} completada`);
+    const method = action === "delete" ? "DELETE" : "POST";
+    const path = action === "delete"
+      ? `/api/printers/${encodeURIComponent(printer)}`
+      : `/api/printers/${encodeURIComponent(printer)}/${action}`;
+    const data = await api(path, { method });
+    if (action === "diagnose") {
+      $("#diagnostic-title").textContent = `Diagnóstico · ${printer}`;
+      $("#diagnostic-result").textContent = data.message;
+      $("#diagnostic-dialog").showModal();
+    } else {
+      toast(data.message || `${labels[action]} completada`);
+    }
     await refresh();
   } catch (error) {
     toast(error.message);

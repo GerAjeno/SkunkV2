@@ -179,6 +179,22 @@
     </form>
   </dialog>
 
+  <dialog id="diagnostic-dialog">
+    <div class="diagnostic-dialog-content">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">ESTADO DE LA IMPRESORA</p>
+          <h2 id="diagnostic-title">Diagnóstico</h2>
+        </div>
+        <button class="icon-button" type="button" onclick="this.closest('dialog').close()" aria-label="Cerrar">×</button>
+      </div>
+      <pre id="diagnostic-result" class="diagnostic-result"></pre>
+      <div class="dialog-actions">
+        <button class="btn btn-primary" type="button" onclick="this.closest('dialog').close()">Cerrar</button>
+      </div>
+    </div>
+  </dialog>
+
   <div id="toast" class="toast" role="status"></div>
   <script src="/static/app.js" defer></script>
 </body>

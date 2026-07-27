@@ -111,7 +111,20 @@ def dispatch(action: str, arguments: list[str]) -> str:
             raise CupsError("Parámetros administrativos incompletos")
         name = validate_printer_name(arguments[0])
         require_success(run_command(["lpadmin", "-x", name]), "No se pudo eliminar la cola")
-        return f"Cola {name} eliminada"
+        return f"Impresora {name} y su configuración fueron eliminadas"
+    if action == "purge":
+        if len(arguments) != 1:
+            raise CupsError("Parámetros administrativos incompletos")
+        name = validate_printer_name(arguments[0])
+        require_success(
+            run_command(["lpstat", "-p", name]),
+            "La impresora no existe",
+        )
+        require_success(
+            run_command(["cancel", "-a", name]),
+            "No se pudieron cancelar los trabajos",
+        )
+        return f"Trabajos pendientes de {name} eliminados"
     if action == "configure":
         if len(arguments) != 1:
             raise CupsError("Parámetros administrativos incompletos")
