@@ -10,6 +10,7 @@ import subprocess
 import threading
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -342,6 +343,93 @@ def _active_job_lines(output: str) -> list[str]:
             current_detail.append(line.strip())
     append_current()
     return jobs
+
+
+def _cups_datetime(value: str) -> str:
+    value = value.strip()
+    for pattern in (
+        "%a %d %b %Y %H:%M:%S",
+        "%a %d %b %Y %I:%M:%S %p %Z",
+        "%a %b %d %H:%M:%S %Y",
+    ):
+        try:
+            return datetime.strptime(value, pattern).replace(tzinfo=UTC).isoformat()
+        except ValueError:
+            continue
+    return datetime.now(UTC).isoformat()
+
+
+def _parse_detailed_jobs(output: str) -> list[dict]:
+    jobs: list[dict] = []
+    current: dict | None = None
+    for line in output.splitlines():
+        if line and not line[0].isspace():
+            parts = line.split(maxsplit=3)
+            if len(parts) < 3 or "-" not in parts[0]:
+                current = None
+                continue
+            printer_name, _, number = parts[0].rpartition("-")
+            if not printer_name or not number.isdigit():
+                current = None
+                continue
+            current = {
+                "cups_job_id": parts[0],
+                "printer_name": printer_name,
+                "source_device": f"CUPS nativo · {parts[1]}",
+                "original_name": f"Trabajo nativo {parts[0]}",
+                "created_at": _cups_datetime(parts[3] if len(parts) == 4 else ""),
+                "pages": 0,
+                "detail": [],
+            }
+            jobs.append(current)
+        elif current is not None:
+            current["detail"].append(line.strip())
+    return jobs
+
+
+def list_cups_jobs(limit: int = 100) -> list[dict]:
+    """Read recent jobs accepted directly by CUPS, including native IPP."""
+    all_result = run_command(["lpstat", "-W", "all", "-l", "-o"])
+    if all_result.returncode != 0:
+        return []
+    completed_result = run_command(["lpstat", "-W", "completed", "-o"])
+    completed_ids = {
+        line.split(maxsplit=1)[0]
+        for line in completed_result.stdout.splitlines()
+        if line.strip()
+    } if completed_result.returncode == 0 else set()
+
+    jobs = _parse_detailed_jobs(all_result.stdout)
+    for job in jobs:
+        detail_lines = job.pop("detail")
+        detail = " ".join(detail_lines).strip()
+        lowered = detail.lower()
+        if (
+            "job-completed-with-errors" in lowered
+            or "job-stopped" in lowered
+            or "filter errors" in lowered
+        ):
+            job["status"] = "failed"
+            status_line = next(
+                (
+                    item.split(":", 1)[1].strip()
+                    for item in detail_lines
+                    if item.lower().startswith(("status:", "estado:"))
+                    and ":" in item
+                ),
+                "",
+            )
+            job["error"] = status_line or "CUPS completó el trabajo con errores"
+        elif job["cups_job_id"] in completed_ids or "job-completed-successfully" in lowered:
+            job["status"] = "completed"
+            job["error"] = None
+        elif "printing" in lowered or "imprimiendo" in lowered or "sending data" in lowered:
+            job["status"] = "processing"
+            job["error"] = None
+        else:
+            job["status"] = "queued"
+            job["error"] = None
+    return jobs[: min(max(limit, 1), 500)]
 
 
 def diagnose_printer(printer_name: str) -> str:

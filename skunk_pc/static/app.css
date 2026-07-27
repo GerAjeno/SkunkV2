@@ -329,7 +329,7 @@ input:focus, select:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgb
   border-radius: var(--radius);
   background: var(--surface);
 }
-table { width: 100%; border-collapse: collapse; min-width: 680px; }
+table { width: 100%; border-collapse: collapse; min-width: 900px; }
 th, td { padding: 15px 18px; text-align: left; border-bottom: 1px solid var(--border); }
 th { color: var(--muted); font-size: .72rem; letter-spacing: .08em; }
 td { font-size: .87rem; }
@@ -348,6 +348,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .job-state.failed { color: var(--red); }
 .job-state.processing { color: var(--cyan); }
 .job-state.queued { color: var(--amber); }
+.job-error { margin-top: 6px; max-width: 320px; color: var(--red); font-size: .75rem; }
 
 .form-message { min-height: 1.2em; color: var(--muted); text-align: center; }
 .form-message.error { color: var(--red); }

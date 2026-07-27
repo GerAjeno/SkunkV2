@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import shutil
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import settings
+from .cups import list_cups_jobs
 from .database import connect, transaction, utc_now
 
 
@@ -18,6 +20,7 @@ def create_job(
     fit_mode: str,
     orientation: str,
     copies: int,
+    source_device: str = "Página web",
 ) -> dict:
     job_id = str(uuid.uuid4())
     created_at = utc_now()
@@ -26,8 +29,8 @@ def create_job(
             """
             INSERT INTO jobs (
                 id, printer_name, original_name, content_type, source_path,
-                fit_mode, orientation, copies, status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)
+                fit_mode, orientation, copies, status, created_at, source_device
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?)
             """,
             (
                 job_id,
@@ -39,6 +42,7 @@ def create_job(
                 orientation,
                 copies,
                 created_at,
+                source_device[:200],
             ),
         )
         db.commit()
@@ -61,6 +65,62 @@ def list_jobs(limit: int = 30) -> list[dict]:
             (limit,),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def list_all_jobs(limit: int = 30) -> list[dict]:
+    """Combine jobs created in the web UI with native IPP/CUPS jobs."""
+    limit = min(max(limit, 1), 100)
+    web_jobs = list_jobs(100)
+    cups_jobs = list_cups_jobs(200)
+    cups_by_id = {job["cups_job_id"]: job for job in cups_jobs}
+    represented_ids: set[str] = set()
+
+    for job in web_jobs:
+        try:
+            cups_ids = json.loads(job.get("cups_job_ids") or "[]")
+        except (TypeError, json.JSONDecodeError):
+            cups_ids = []
+        represented_ids.update(cups_ids)
+        states = [cups_by_id[item] for item in cups_ids if item in cups_by_id]
+        if states:
+            if any(item["status"] == "failed" for item in states):
+                failed = next(item for item in states if item["status"] == "failed")
+                job["status"] = "failed"
+                job["error"] = failed.get("error")
+            elif all(item["status"] == "completed" for item in states):
+                job["status"] = "completed"
+            elif any(item["status"] == "processing" for item in states):
+                job["status"] = "processing"
+        job["source"] = "web"
+
+    native_jobs = [
+        {
+            "id": f"cups:{job['cups_job_id']}",
+            "original_name": job["original_name"],
+            "printer_name": job["printer_name"],
+            "status": job["status"],
+            "pages": job.get("pages", 0),
+            "created_at": job["created_at"],
+            "error": job.get("error"),
+            "source_device": job["source_device"],
+            "source": "native",
+        }
+        for job in cups_jobs
+        if job["cups_job_id"] not in represented_ids
+    ]
+    combined = web_jobs + native_jobs
+    combined.sort(
+        key=lambda job: _sortable_datetime(job.get("created_at")),
+        reverse=True,
+    )
+    return combined[:limit]
+
+
+def _sortable_datetime(value: object) -> datetime:
+    try:
+        return datetime.fromisoformat(str(value))
+    except ValueError:
+        return datetime.min.replace(tzinfo=UTC)
 
 
 def claim_next_job() -> dict | None:
@@ -128,4 +188,3 @@ def remove_job_files(job: dict) -> None:
     output = settings.output_dir / job["id"]
     if output.is_dir() and output.parent == settings.output_dir:
         shutil.rmtree(output)
-

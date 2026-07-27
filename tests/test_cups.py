@@ -6,6 +6,7 @@ import skunk_pc.cups as cups
 from skunk_pc.cups import (
     CommandResult,
     _ppd_identity,
+    list_cups_jobs,
     _selected_ppd_choice,
     diagnose_printer,
     discover_usb_printers,
@@ -213,6 +214,37 @@ def test_diagnose_ignores_completed_job_reported_as_not_completed(monkeypatch) -
 
     assert "No se detectaron problemas de software" in message
     assert "Trabajos pendientes: 0" in message
+
+
+def test_list_cups_jobs_reports_native_origin_and_error(monkeypatch) -> None:
+    def fake_run_command(arguments):
+        if "all" in arguments:
+            return CommandResult(
+                0,
+                "Zima-12 android-phone 18432 Mon 27 Jul 2026 17:30:00\n"
+                "\tStatus: No pages were found.\n"
+                "\tAlerts: job-completed-with-errors\n"
+                "\tqueued for Zima\n"
+                "Zima-13 iphone 2048 Mon 27 Jul 2026 17:31:00\n"
+                "\tAlerts: job-completed-successfully\n",
+                "",
+            )
+        return CommandResult(
+            0,
+            "Zima-12 android-phone 18432 Mon 27 Jul 2026 17:30:00\n"
+            "Zima-13 iphone 2048 Mon 27 Jul 2026 17:31:00",
+            "",
+        )
+
+    monkeypatch.setattr(cups, "run_command", fake_run_command)
+
+    jobs = list_cups_jobs()
+
+    assert jobs[0]["source_device"] == "CUPS nativo · android-phone"
+    assert jobs[0]["printer_name"] == "Zima"
+    assert jobs[0]["status"] == "failed"
+    assert jobs[0]["error"] == "No pages were found."
+    assert jobs[1]["status"] == "completed"
 
 
 def test_diagnose_ignores_failed_job_left_in_not_completed(monkeypatch) -> None:

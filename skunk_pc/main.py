@@ -44,7 +44,7 @@ from .cups import (
     validate_printer_name,
 )
 from .database import init_database
-from .jobs import cancel_job, create_job, list_jobs
+from .jobs import cancel_job, create_job, list_all_jobs
 
 
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -226,7 +226,7 @@ async def api_devices(request: Request):
 @app.get("/api/jobs")
 async def api_jobs(request: Request, limit: int = 30):
     require_authenticated(request)
-    jobs = await asyncio.to_thread(list_jobs, limit)
+    jobs = await asyncio.to_thread(list_all_jobs, limit)
     return {"ok": True, "jobs": jobs}
 
 
@@ -288,6 +288,12 @@ async def api_create_job(
         raise HTTPException(status_code=400, detail="Copias inválidas")
 
     source = await _save_upload(document)
+    client_ip = request.client.host if request.client else "origen desconocido"
+    user_agent = request.headers.get("user-agent", "")
+    device = "Teléfono/navegador" if any(
+        marker in user_agent.lower()
+        for marker in ("android", "iphone", "ipad", "mobile")
+    ) else "Navegador web"
     try:
         job = await asyncio.to_thread(
             create_job,
@@ -298,6 +304,7 @@ async def api_create_job(
             fit_mode=fit_mode,
             orientation=orientation,
             copies=copies,
+            source_device=f"{device} · {client_ip}",
         )
     except Exception:
         source.unlink(missing_ok=True)

@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     ),
     pages INTEGER NOT NULL DEFAULT 0,
     cups_job_ids TEXT NOT NULL DEFAULT '',
+    source_device TEXT NOT NULL DEFAULT 'Página web',
     error TEXT,
     created_at TEXT NOT NULL,
     started_at TEXT,
@@ -51,6 +52,15 @@ def init_database(path: Path | None = None) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with connect(db_path) as db:
         db.executescript(SCHEMA)
+        columns = {
+            row["name"]
+            for row in db.execute("PRAGMA table_info(jobs)").fetchall()
+        }
+        if "source_device" not in columns:
+            db.execute(
+                "ALTER TABLE jobs ADD COLUMN source_device TEXT "
+                "NOT NULL DEFAULT 'Página web'"
+            )
 
 
 @contextmanager
@@ -69,4 +79,3 @@ def transaction(path: Path | None = None) -> Iterator[sqlite3.Connection]:
 
 def utc_now() -> str:
     return datetime.now(UTC).isoformat()
-

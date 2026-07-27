@@ -91,17 +91,26 @@ function renderPrinters(printers) {
 function renderJobs(jobs) {
   const body = $("#jobs-body");
   if (!jobs.length) {
-    body.innerHTML = '<tr><td colspan="5" class="muted">Sin trabajos todavía.</td></tr>';
+    body.innerHTML = '<tr><td colspan="6" class="muted">Sin trabajos todavía.</td></tr>';
     return;
   }
   body.innerHTML = jobs.map((job) => {
     const date = new Date(job.created_at);
-    const error = job.error ? ` title="${escapeHtml(job.error)}"` : "";
+    const error = job.error ? `<div class="job-error">${escapeHtml(job.error)}</div>` : "";
+    const labels = {
+      queued: "En cola",
+      processing: "Procesando",
+      submitted: "Enviado",
+      completed: "Completado",
+      failed: "Error",
+      cancelled: "Cancelado"
+    };
     return `
       <tr>
         <td>${escapeHtml(job.original_name)}</td>
+        <td>${escapeHtml(job.source_device || "Origen no informado")}</td>
         <td>${escapeHtml(job.printer_name)}</td>
-        <td${error}><span class="job-state ${escapeHtml(job.status)}">${escapeHtml(job.status)}</span></td>
+        <td><span class="job-state ${escapeHtml(job.status)}">${escapeHtml(labels[job.status] || job.status)}</span>${error}</td>
         <td>${escapeHtml(job.pages)}</td>
         <td>${date.toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" })}</td>
       </tr>`;
