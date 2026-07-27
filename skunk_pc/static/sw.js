@@ -1,4 +1,4 @@
-const CACHE = "skunk-pc-static-v7";
+const CACHE = "skunk-pc-static-v8";
 const STATIC_ASSETS = [
   "/static/app.css",
   "/static/app.js",

@@ -17,7 +17,7 @@ def test_add_printer_cancel_buttons_do_not_submit_form() -> None:
 def test_static_cache_is_current() -> None:
     service_worker = (PACKAGE_DIR / "static" / "sw.js").read_text()
 
-    assert 'const CACHE = "skunk-pc-static-v7";' in service_worker
+    assert 'const CACHE = "skunk-pc-static-v8";' in service_worker
 
 
 def test_add_printer_marks_missing_serials_and_installed_devices() -> None:
@@ -51,3 +51,12 @@ def test_periodic_refreshes_do_not_overlap() -> None:
 
     assert "let refreshInProgress = false;" in javascript
     assert "if (refreshInProgress) return;" in javascript
+
+
+def test_print_form_survives_async_submission() -> None:
+    javascript = (PACKAGE_DIR / "static" / "app.js").read_text()
+
+    assert "const form = event.currentTarget;" in javascript
+    assert "form.reset();" in javascript
+    assert "event.currentTarget.reset();" not in javascript
+    assert 'message.className = "form-message error";' in javascript

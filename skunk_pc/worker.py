@@ -39,14 +39,18 @@ def process_job(job: dict) -> None:
             fit_mode=job["fit_mode"],
             orientation=job["orientation"],
         )
-        for page in pages:
-            cups_ids.append(
-                submit_file(
-                    printer.name,
-                    page,
-                    copies=job["copies"],
+        # Several legacy Zebra PPDs advertise copy support but only emit one
+        # physical label. Submit each copy explicitly so all Zebra models
+        # behave consistently.
+        for _copy in range(job["copies"]):
+            for page in pages:
+                cups_ids.append(
+                    submit_file(
+                        printer.name,
+                        page,
+                        copies=1,
+                    )
                 )
-            )
         finish_job(
             job["id"],
             status="submitted",

@@ -153,6 +153,7 @@ for (const eventName of ["dragleave", "drop"]) {
 
 $("#print-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const form = event.currentTarget;
   const submit = $("#print-submit");
   const message = $("#print-message");
   submit.disabled = true;
@@ -162,16 +163,17 @@ $("#print-form")?.addEventListener("submit", async (event) => {
   try {
     const data = await api("/api/jobs", {
       method: "POST",
-      body: new FormData(event.currentTarget)
+      body: new FormData(form)
     });
-    message.textContent = `Trabajo recibido: ${data.job.original_name}`;
-    message.classList.add("success");
-    event.currentTarget.reset();
+    const copies = data.job.copies === 1 ? "1 copia" : `${data.job.copies} copias`;
+    message.textContent = `Trabajo recibido: ${data.job.original_name} · ${copies}`;
+    message.className = "form-message success";
+    form.reset();
     $("#file-label").textContent = "Toca para seleccionar un archivo";
     await refresh();
   } catch (error) {
     message.textContent = error.message;
-    message.classList.add("error");
+    message.className = "form-message error";
   } finally {
     submit.disabled = false;
     submit.textContent = "Imprimir ahora";
