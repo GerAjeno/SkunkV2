@@ -44,7 +44,6 @@ staging_dir="$(sudo mktemp -d /opt/skunk-pc/app.update.XXXXXX)"
 sudo chmod 0755 "$staging_dir"
 swapped=0
 console_service_existed=0
-getty_was_enabled="$(sudo systemctl is-enabled getty@tty1.service 2>/dev/null || true)"
 
 cleanup() {
     if [[ -n "${staging_dir:-}" && "$staging_dir" == /opt/skunk-pc/app.update.* ]]; then
@@ -78,9 +77,7 @@ rollback() {
     else
         sudo systemctl disable --now skunk-console.service 2>/dev/null || true
         sudo rm -f /etc/systemd/system/skunk-console.service
-        if [[ "$getty_was_enabled" == "enabled" ]]; then
-            sudo systemctl enable --now getty@tty1.service || true
-        fi
+        sudo systemctl enable --now getty@tty1.service || true
     fi
     cleanup
     exit "$exit_code"
@@ -128,7 +125,7 @@ if ! command -v btop >/dev/null 2>&1; then
     sudo apt-get update
     sudo apt-get install -y btop
 fi
-sudo systemctl disable --now getty@tty1.service 2>/dev/null || true
+sudo systemctl enable getty@tty1.service
 sudo systemctl enable skunk-console.service
 sudo systemctl restart skunk-admin skunk-worker skunk-api skunk-console
 

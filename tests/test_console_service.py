@@ -11,7 +11,9 @@ def test_console_runs_btop_on_tty1_as_restricted_user() -> None:
     assert "ExecStart=/usr/bin/btop" in unit
     assert "TTYPath=/dev/tty1" in unit
     assert "StandardInput=tty-force" in unit
-    assert "Restart=always" in unit
+    assert "Restart=no" in unit
+    assert "OnSuccess=getty@tty1.service" in unit
+    assert "OnFailure=getty@tty1.service" in unit
     assert "NoNewPrivileges=true" in unit
 
 
@@ -21,6 +23,8 @@ def test_install_and_update_manage_console_service() -> None:
 
     assert "fonts-dejavu-core colord btop" in install
     assert "skunk-console.service" in install
-    assert "disable --now getty@tty1.service" in install
+    assert "enable getty@tty1.service" in install
+    assert "disable --now getty@tty1.service" not in install
     assert "apt-get install -y btop" in update
     assert "skunk-console.service" in update
+    assert "enable getty@tty1.service" in update

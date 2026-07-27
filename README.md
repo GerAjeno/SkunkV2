@@ -169,7 +169,8 @@ impresora, IP/origen y resultado. La retención puede personalizarse mediante
 
 Al terminar el arranque, `skunk-console.service` abre `btop` automáticamente en
 la consola física `tty1`. Se ejecuta como el usuario restringido `skunkpc`, no
-como root, y reemplaza únicamente el `getty` de esa consola.
+como root. Al salir de `btop` con `q`, la consola muestra el inicio de sesión
+normal de `tty1`.
 
 ## Seguridad
 

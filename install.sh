@@ -107,7 +107,7 @@ install -m 0755 "${source_dir}/scripts/activate-native-printing.sh" \
     /usr/local/sbin/skunk-activate-native-printing
 
 systemctl daemon-reload
-systemctl disable --now getty@tty1.service 2>/dev/null || true
+systemctl enable getty@tty1.service
 systemctl enable --now \
     skunk-admin.service skunk-worker.service skunk-api.service \
     skunk-console.service
