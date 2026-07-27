@@ -15,18 +15,20 @@ El instalador usa el puerto **8081** de forma predeterminada para convivir con
 un sistema anterior. En un servidor nuevo puede seleccionarse otro puerto
 mediante `SKUNK_PORT`.
 
-## Hardware confirmado
+## Hardware compatible
 
-La implementación inicial se validará contra:
+La implementación ha sido validada con impresoras Zebra térmicas de escritorio,
+incluidas TLP2844 y GC420t en modo EPL2, con:
 
-- Zebra GC420t en modo EPL2.
 - Resolución de 203 DPI.
 - Etiqueta física de 4×6 pulgadas.
 - Matriz exacta de 812×1218 puntos.
-- Conexión USB con fabricante, modelo y número de serie estable.
+- Impresión térmica directa o transferencia térmica con ribbon.
+- Conexión USB identificada por fabricante, modelo y número de serie.
 
-También admite otras Zebra EPL2 o ZPL que CUPS exponga mediante un URI USB o
-`socket://IP:9100`.
+También admite modelos Zebra equivalentes, como GK888, cuando CUPS dispone de
+un controlador EPL2 o ZPL compatible. Las impresoras de red pueden agregarse
+mediante una dirección `socket` en el puerto 9100.
 
 ## Arquitectura
 
@@ -40,7 +42,8 @@ Android/iPhone ─┬─ Web móvil :8081 ─ API ─ SQLite ─ Worker ─ CUPS
 - `skunk-admin`: agente root local, accesible únicamente mediante un socket Unix
   del grupo `skunkpc`. Solo acepta operaciones CUPS validadas.
 - CUPS: spooler, publicación IPP y filtro `rastertolabel`.
-- SQLite: historial y estados de los trabajos enviados desde la web.
+- SQLite: historial unificado de trabajos web y trabajos nativos recibidos por
+  CUPS.
 
 ## Formatos web soportados
 
@@ -59,9 +62,7 @@ Cada página es:
 Los documentos de Office no están habilitados en esta primera versión. Se
 agregarán mediante una conversión aislada después de validar PDF e imágenes.
 
-## Instalación de prueba
-
-No ejecutes el instalador de Antigravity antes de instalar esta versión.
+## Instalación
 
 Descomprime el paquete, entra a su carpeta y ejecuta:
 
@@ -81,7 +82,8 @@ El instalador:
 - Instala CUPS, Avahi, Poppler, Ghostscript y Python.
 - Crea el usuario restringido `skunkpc`.
 - Solicita una contraseña para el panel.
-- Instala tres servicios systemd.
+- Instala cuatro servicios systemd: API, worker, agente administrativo y
+  monitor de consola.
 - Inicia la web en el puerto elegido (8081 de forma predeterminada).
 - No detiene ni reemplaza el servicio antiguo del puerto 8080.
 - No modifica todavía `cupsd.conf`.
@@ -97,40 +99,47 @@ sudo SKUNK_ADMIN_PASSWORD='una-clave-larga-y-segura' ./install.sh
 Después de instalar:
 
 ```bash
-systemctl status skunk-admin skunk-worker skunk-api --no-pager
+systemctl status \
+  skunk-admin skunk-worker skunk-api skunk-console \
+  --no-pager
 curl -I http://127.0.0.1:8081/login
 ```
 
-Abre desde el teléfono:
+Abre el panel desde otro equipo usando el nombre local del servidor o la
+dirección que le haya asignado la red, seguida del puerto configurado.
 
-```text
-http://192.168.1.147:8081
-```
+Como ejemplo de organización, las colas pueden llamarse
+`Etiquetadora_Recepcion` y `Etiquetadora_Despacho`. Los nombres visibles son
+libres y no deben depender del modelo, puerto USB o dirección del servidor.
 
-En la tarjeta de `Planchetta`, la aplicación debe mostrar que la URI
-`usb://Unknown/Printer?serial=0.0` está desconectada. El botón
-**Reparar y fijar 4×6** debe seleccionar la única Zebra USB detectada y
-configurar:
+Desde **Añadir Zebra**, selecciona el dispositivo USB disponible, el lenguaje
+compatible y el método de impresión correspondiente. El dispositivo debe
+mostrar su número de serie cuando el firmware lo proporciona. Si indica
+**S/N no informado**, identifica físicamente la impresora antes de crear la
+cola.
 
-```text
-usb://Zebra%20Technologies/ZTC%20GC420t%20(EPL)?serial=54J170200124
-```
+En cada tarjeta de impresora están disponibles:
+
+- **Prueba**: imprime una etiqueta de validación.
+- **Calibrar**: ejecuta la calibración del medio.
+- **Reparar y fijar 4×6**: recupera la conexión y normaliza tamaño, resolución
+  y método térmico.
+- **Vaciar cola**: cancela los trabajos pendientes de esa impresora.
+- **Diagnóstico**: revisa conexión, estado CUPS, cola, resolución y formato.
+- **Eliminar**: elimina la cola y su configuración del sistema.
 
 Antes de reparar una cola con trabajos antiguos, revísalos:
 
 ```bash
-lpstat -o Planchetta
+lpstat -o Etiquetadora_Recepcion
 ```
 
 No se cancelan automáticamente, porque podrían contener impresiones válidas.
 Si son solamente pruebas antiguas y decides eliminarlas:
 
 ```bash
-cancel -a Planchetta
+cancel -a Etiquetadora_Recepcion
 ```
-
-La secuencia completa de validación y reversión está en
-[`docs/VALIDACION-BODEGA.md`](docs/VALIDACION-BODEGA.md).
 
 ## Activar impresión nativa
 
@@ -156,6 +165,11 @@ Este comando:
 La impresora Zebra debe quedar marcada como compartida para que aparezca en el
 diálogo de impresión de Android/iPhone.
 
+El activador no depende de un rango de red fijo. Detecta la interfaz que posee
+la ruta predeterminada, obtiene su subred directamente del sistema y configura
+CUPS para clientes locales. Si cambia la red del servidor, vuelve a ejecutar
+primero `--check` y después la activación.
+
 ## Historial de impresión
 
 La aplicación conserva durante 30 días los trabajos enviados desde la web y
@@ -166,6 +180,12 @@ retención; nunca elimina trabajos en cola o en procesamiento.
 El panel muestra 30, 50 o 100 trabajos por página y permite filtrar por fecha,
 impresora, IP/origen y resultado. La retención puede personalizarse mediante
 `SKUNK_JOB_RETENTION_HOURS`.
+
+Cada registro incluye el documento o identificador de trabajo, dispositivo o
+dirección de origen, impresora de destino, resultado, páginas y hora en formato
+de 24 horas. Si CUPS informa un fallo, el historial conserva el mensaje de
+error. Los registros históricos completados no deben confundirse con trabajos
+pendientes en la cola.
 
 Al terminar el arranque, `skunk-console.service` abre `btop` automáticamente en
 la consola física `tty1`. Se ejecuta como el usuario restringido `skunkpc`, no
@@ -211,20 +231,163 @@ python -m skunk_pc.main
 
 Nunca habilites `SKUNK_DEV_AUTH_BYPASS` en el servidor.
 
+## Migración de una imagen de disco a producción
+
+La aplicación no contiene una dirección de red fija y puede funcionar en una
+subred diferente. Sin embargo, una imagen completa conserva la configuración
+de red y la identidad del equipo original. Si el hardware de producción usa
+otra tarjeta Wi-Fi o Ethernet, realiza estos pasos desde una pantalla y teclado
+locales.
+
+El equipo original debe permanecer apagado durante la puesta en marcha del
+clon.
+
+### 1. Primer arranque y detección de interfaces
+
+Inicia el equipo de producción y sal de `btop` con `q` si necesitas acceder al
+inicio de sesión. Comprueba los nombres reales de sus interfaces:
+
+```bash
+ip -brief link
+```
+
+No supongas que la nueva tarjeta conservará nombres como `wlp6s0` o `eno1`.
+
+### 2. Adaptar Netplan
+
+Respalda la configuración existente:
+
+```bash
+sudo cp -a /etc/netplan \
+  "/etc/netplan.backup.$(date +%Y%m%d-%H%M%S)"
+```
+
+Edita el archivo YAML de `/etc/netplan/` y sustituye la interfaz o coincidencia
+de hardware anterior por la interfaz real del equipo de producción. Configura
+en ese archivo el SSID y la contraseña de la red de producción. Marca como
+`optional: true` cualquier interfaz cableada que normalmente permanezca
+desconectada, para que no retrase el arranque.
+
+Valida antes de aplicar:
+
+```bash
+sudo netplan generate
+sudo netplan try
+```
+
+Después confirma la conectividad:
+
+```bash
+ip -brief address
+ip route
+networkctl status --all
+```
+
+### 3. Evitar identidades duplicadas
+
+Asigna un nombre exclusivo al servidor de producción:
+
+```bash
+sudo hostnamectl hostname NOMBRE-NUEVO
+```
+
+Regenera la identidad de la máquina y las claves de host SSH solamente en el
+clon:
+
+```bash
+sudo truncate -s 0 /etc/machine-id
+sudo rm -f /var/lib/dbus/machine-id
+sudo systemd-machine-id-setup
+sudo rm -f /etc/ssh/ssh_host_*
+sudo ssh-keygen -A
+sudo systemctl restart ssh
+```
+
+Al cambiar las claves SSH, los clientes que conocían la identidad anterior
+deberán aceptar la nueva huella después de verificarla localmente.
+
+### 4. Zona horaria y servicios
+
+Configura la zona horaria correspondiente a la ubicación de producción:
+
+```bash
+sudo timedatectl set-timezone America/Santiago
+timedatectl
+```
+
+Comprueba los servicios:
+
+```bash
+systemctl is-active \
+  cups avahi-daemon skunk-admin skunk-worker skunk-api skunk-console
+```
+
+Todos deben responder `active`.
+
+### 5. Reconfigurar la publicación nativa
+
+Con el servidor conectado definitivamente a la nueva red:
+
+```bash
+sudo skunk-activate-native-printing --check
+sudo skunk-activate-native-printing
+```
+
+Verifica que CUPS escuche, que Avahi publique las colas y que no queden trabajos
+pendientes:
+
+```bash
+ss -lntup
+avahi-browse -rt _ipp._tcp
+lpstat -t
+```
+
+Si UFW estaba activo, revisa sus reglas después de la activación para retirar
+manualmente cualquier autorización perteneciente a la red anterior.
+
+### 6. Validar cada impresora
+
+Las colas USB con número de serie estable no dependen del puerto físico. Aun
+así, valida cada una desde el panel:
+
+1. Comprueba que el dispositivo aparezca disponible.
+2. Ejecuta **Diagnóstico**.
+3. Imprime una **Prueba**.
+4. Envía una etiqueta desde el panel web.
+5. Envía una etiqueta mediante impresión nativa desde un teléfono.
+6. Confirma formato 4×6, orientación, calidad, copias e historial.
+
+Si se conectan impresoras nuevas, créalas exclusivamente desde **Añadir Zebra**
+en el panel. No reutilices una cola de otra impresora solamente porque ambas
+compartan modelo.
+
+### 7. Verificación final
+
+```bash
+systemctl --failed
+lpstat -t
+journalctl \
+  -u cups -u skunk-api -u skunk-worker -u skunk-admin \
+  --since "15 minutes ago" --no-pager
+```
+
+Conserva apagado el servidor original hasta completar estas pruebas y confirmar
+que no existen nombres de host, colas o identidades duplicadas.
+
 ## Actualización desde GitHub
 
 Después de instalar la aplicación, las versiones nuevas se aplican desde el
 repositorio con:
 
 ```bash
-cd /home/bodega/Skunk-PC-Next
+cd <RUTA-DEL-REPOSITORIO>
 ./update.sh
 ```
 
 El actualizador exige la rama `main` sin cambios locales, descarga únicamente
 un avance rápido desde `origin/main`, crea un respaldo en
 `/var/backups/skunk-pc`, actualiza código, dependencias y unidades, reinicia los
-tres servicios y valida el panel en el puerto configurado. Si la validación
+cuatro servicios y valida el panel en el puerto configurado. Si la validación
 falla, restaura la aplicación y las unidades anteriores.
 
 ## Desinstalación segura
