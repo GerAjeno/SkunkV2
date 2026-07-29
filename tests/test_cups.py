@@ -238,6 +238,11 @@ def test_list_cups_jobs_reports_native_origin_and_error(monkeypatch) -> None:
         )
 
     monkeypatch.setattr(cups, "run_command", fake_run_command)
+    monkeypatch.setattr(
+        cups,
+        "run_admin_helper",
+        lambda action, *_args: "{}" if action == "job-pages" else "[]",
+    )
 
     jobs = list_cups_jobs()
 
@@ -246,6 +251,7 @@ def test_list_cups_jobs_reports_native_origin_and_error(monkeypatch) -> None:
     assert jobs[0]["status"] == "failed"
     assert jobs[0]["error"] == "No pages were found."
     assert jobs[1]["status"] == "completed"
+    assert jobs[1]["pages"] == 1
 
 
 def test_attach_native_origins_replaces_unknown_with_client_ip(monkeypatch) -> None:
@@ -273,6 +279,11 @@ def test_attach_native_origins_replaces_unknown_with_client_ip(monkeypatch) -> N
 def test_job_origins_is_an_allowed_admin_action() -> None:
     with pytest.raises(cups.CupsError, match="servicio administrativo"):
         cups.run_admin_helper("job-origins")
+
+
+def test_job_pages_is_an_allowed_admin_action() -> None:
+    with pytest.raises(cups.CupsError, match="servicio administrativo"):
+        cups.run_admin_helper("job-pages")
 
 
 def test_diagnose_ignores_failed_job_left_in_not_completed(monkeypatch) -> None:

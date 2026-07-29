@@ -134,6 +134,35 @@ def list_all_jobs(
     """Return a filtered page combining web and persisted native jobs."""
     page = max(page, 1)
     page_size = min(max(page_size, 1), 100)
+    combined = filtered_jobs(
+        printer=printer,
+        status=status,
+        origin=origin,
+        created_after=created_after,
+        created_before=created_before,
+    )
+    total = len(combined)
+    pages = max(1, (total + page_size - 1) // page_size)
+    page = min(page, pages)
+    start = (page - 1) * page_size
+    return {
+        "jobs": combined[start : start + page_size],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "pages": pages,
+    }
+
+
+def filtered_jobs(
+    *,
+    printer: str = "",
+    status: str = "",
+    origin: str = "",
+    created_after: str = "",
+    created_before: str = "",
+) -> list[dict]:
+    """Return all filtered history rows, newest first."""
     sync_cups_history()
     cleanup_history()
     with connect() as db:
@@ -207,17 +236,7 @@ def list_all_jobs(
         key=lambda job: _sortable_datetime(job.get("created_at")),
         reverse=True,
     )
-    total = len(combined)
-    pages = max(1, (total + page_size - 1) // page_size)
-    page = min(page, pages)
-    start = (page - 1) * page_size
-    return {
-        "jobs": combined[start : start + page_size],
-        "page": page,
-        "page_size": page_size,
-        "total": total,
-        "pages": pages,
-    }
+    return combined
 
 
 def _sortable_datetime(value: object) -> datetime:

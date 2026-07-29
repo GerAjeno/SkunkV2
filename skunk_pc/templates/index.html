@@ -125,7 +125,10 @@
           <p class="eyebrow">ACTIVIDAD</p>
           <h2>Trabajos recientes</h2>
         </div>
-        <button id="refresh-button" class="btn btn-quiet" type="button">Actualizar</button>
+        <div class="heading-actions">
+          <button id="jobs-export" class="btn btn-secondary" type="button">Exportar Excel</button>
+          <button id="refresh-button" class="btn btn-quiet" type="button">Actualizar</button>
+        </div>
       </div>
       <form id="job-filters" class="job-filters">
         <label>
@@ -226,6 +229,29 @@
         <button id="add-printer-submit" class="btn btn-primary" type="submit">Crear impresora</button>
       </div>
       <div id="add-message" class="form-message"></div>
+    </form>
+  </dialog>
+
+  <dialog id="rename-printer-dialog">
+    <form id="rename-printer-form" method="dialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">CONFIGURACIÓN</p>
+          <h2>Renombrar impresora</h2>
+        </div>
+        <button class="icon-button" type="button" data-close-rename aria-label="Cerrar">×</button>
+      </div>
+      <input id="rename-old-name" type="hidden">
+      <label>
+        Nombre nuevo
+        <input id="rename-new-name" name="name"
+          pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,62}" required>
+      </label>
+      <p id="rename-message" class="form-message"></p>
+      <div class="dialog-actions">
+        <button class="btn btn-quiet" type="button" data-close-rename>Cancelar</button>
+        <button id="rename-submit" class="btn btn-primary" type="submit">Guardar nombre</button>
+      </div>
     </form>
   </dialog>
 

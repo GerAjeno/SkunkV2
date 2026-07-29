@@ -22,6 +22,8 @@ from .cups import (
 SOCKET_PATH = Path(os.getenv("SKUNK_ADMIN_SOCKET", "/run/skunk-pc/admin.sock"))
 running = True
 ACCESS_LOG = Path("/var/log/cups/access_log")
+SPOOL_DIR = Path("/var/spool/cups")
+_PAGE_CACHE: dict[str, tuple[int, int, int]] = {}
 PRINT_JOB_RE = re.compile(
     r'^(?P<host>\S+)\s+.*?\[(?P<time>[^\]]+)\]\s+'
     r'"POST\s+/printers/(?P<printer>[^?\s]+).*?"\s+\d+\s+\d+\s+'
@@ -88,6 +90,39 @@ def _native_job_origins(path: Path = ACCESS_LOG) -> list[dict[str, str]]:
     return events[-300:]
 
 
+def _native_job_pages(path: Path = SPOOL_DIR) -> dict[str, int]:
+    """Return page counts for retained native job documents."""
+    pages: dict[str, int] = {}
+    try:
+        documents = list(path.glob("d[0-9][0-9][0-9][0-9][0-9]-*"))
+    except OSError:
+        return pages
+    for document in documents[-500:]:
+        match = re.match(r"d0*(\d+)-", document.name)
+        if not match:
+            continue
+        try:
+            stat = document.stat()
+            cache_key = str(document)
+            cached = _PAGE_CACHE.get(cache_key)
+            if cached and cached[:2] == (stat.st_mtime_ns, stat.st_size):
+                count = cached[2]
+            elif stat.st_size <= 64 * 1024 * 1024:
+                content = document.read_bytes()
+                count = len(re.findall(rb"/Type\s*/Page\b", content))
+                _PAGE_CACHE[cache_key] = (stat.st_mtime_ns, stat.st_size, count)
+            else:
+                count = 0
+        except OSError:
+            continue
+        if count:
+            pages[match.group(1)] = max(
+                pages.get(match.group(1), 0),
+                count,
+            )
+    return pages
+
+
 def _configure(name: str, uri: str, language: str, media_type: str) -> None:
     validate_printer_name(name)
     _validate_uri(uri)
@@ -139,6 +174,10 @@ def dispatch(action: str, arguments: list[str]) -> str:
         if arguments:
             raise CupsError("La consulta de orígenes no acepta parámetros")
         return json.dumps(_native_job_origins())
+    if action == "job-pages":
+        if arguments:
+            raise CupsError("La consulta de páginas no acepta parámetros")
+        return json.dumps(_native_job_pages())
     if action == "devices":
         if arguments:
             raise CupsError("La consulta de dispositivos no acepta parámetros")
@@ -169,6 +208,31 @@ def dispatch(action: str, arguments: list[str]) -> str:
         if run_command(["lpstat", "-p", name]).returncode == 0:
             raise CupsError("CUPS mantuvo la cola después de solicitar su eliminación")
         return f"Impresora {name} y su configuración fueron eliminadas"
+    if action == "rename":
+        if len(arguments) != 5:
+            raise CupsError("Parámetros administrativos incompletos")
+        old_name, new_name, uri, language, media_type = arguments
+        old_name = validate_printer_name(old_name)
+        new_name = validate_printer_name(new_name)
+        if old_name == new_name:
+            raise CupsError("El nombre nuevo debe ser diferente")
+        require_success(run_command(["lpstat", "-p", old_name]), "La impresora no existe")
+        if run_command(["lpstat", "-p", new_name]).returncode == 0:
+            raise CupsError("Ya existe una impresora con ese nombre")
+
+        _configure(new_name, uri, language, media_type)
+        try:
+            run_command(["cancel", "-a", "-x", old_name])
+            require_success(
+                run_command(["lpadmin", "-x", old_name]),
+                "No se pudo retirar la cola con el nombre anterior",
+            )
+            if run_command(["lpstat", "-p", old_name]).returncode == 0:
+                raise CupsError("CUPS mantuvo la cola con el nombre anterior")
+        except Exception:
+            run_command(["lpadmin", "-x", new_name])
+            raise
+        return f"Impresora {old_name} renombrada como {new_name}"
     if action == "purge":
         if len(arguments) != 1:
             raise CupsError("Parámetros administrativos incompletos")

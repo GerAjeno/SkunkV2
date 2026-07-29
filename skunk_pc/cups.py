@@ -429,6 +429,7 @@ def list_cups_jobs(limit: int = 100) -> list[dict]:
         else:
             job["status"] = "queued"
             job["error"] = None
+    _attach_native_pages(jobs)
     _attach_native_origins(jobs)
     return jobs[: min(max(limit, 1), 500)]
 
@@ -463,7 +464,7 @@ def _attach_native_origins(jobs: list[dict]) -> None:
             for index, (event, event_time) in enumerate(available)
             if index not in used
             and event.get("printer_name") == job["printer_name"]
-            and abs((event_time - job_time).total_seconds()) <= 10
+            and abs((event_time - job_time).total_seconds()) <= 120
         ]
         if not candidates:
             continue
@@ -477,6 +478,52 @@ def _attach_native_origins(jobs: list[dict]) -> None:
             job["source_device"] = f"IP {client_ip}"
         else:
             job["source_device"] = f"{owner} · IP {client_ip}"
+
+    # Localized `lpstat` dates cannot always be parsed. CUPS preserves the
+    # order of jobs and access events, so pair the remaining records by queue
+    # and chronological position instead of leaving their origin unknown.
+    for printer_name in {job["printer_name"] for job in jobs}:
+        remaining_jobs = [
+            job for job in jobs
+            if job["printer_name"] == printer_name
+            and "IP " not in job["source_device"]
+        ]
+        remaining_events = [
+            (index, event, event_time)
+            for index, (event, event_time) in enumerate(available)
+            if index not in used and event.get("printer_name") == printer_name
+        ]
+        remaining_jobs.sort(key=lambda item: item.get("created_at", ""))
+        remaining_events.sort(key=lambda item: item[2])
+        if len(remaining_events) > len(remaining_jobs):
+            remaining_events = remaining_events[-len(remaining_jobs):]
+        for job, (index, event, _event_time) in zip(remaining_jobs, remaining_events):
+            client_ip = str(event.get("client_ip") or "").strip()
+            if client_ip:
+                owner = job["source_device"].removeprefix("CUPS nativo · ").strip()
+                if owner.lower() in {"", "unknown", "desconocido"}:
+                    job["source_device"] = f"IP {client_ip}"
+                else:
+                    job["source_device"] = f"{owner} · IP {client_ip}"
+                used.add(index)
+
+
+def _attach_native_pages(jobs: list[dict]) -> None:
+    try:
+        response = run_admin_helper("job-pages")
+        page_counts = json.loads(response)
+    except (CupsError, json.JSONDecodeError):
+        page_counts = {}
+    if not isinstance(page_counts, dict):
+        page_counts = {}
+    for job in jobs:
+        numeric_id = job["cups_job_id"].rpartition("-")[2].lstrip("0") or "0"
+        pages = page_counts.get(numeric_id)
+        if isinstance(pages, int) and pages > 0:
+            job["pages"] = pages
+        elif job["status"] != "failed":
+            # Every accepted native print job contains at least one page.
+            job["pages"] = 1
 
 
 def diagnose_printer(printer_name: str) -> str:
@@ -619,9 +666,11 @@ def run_admin_helper(action: str, *arguments: str) -> str:
     allowed_actions = {
         "devices",
         "job-origins",
+        "job-pages",
         "add",
         "repair",
         "delete",
+        "rename",
         "purge",
         "configure",
         "enable",

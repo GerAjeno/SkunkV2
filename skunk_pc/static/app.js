@@ -106,6 +106,7 @@ function renderPrinters(printers) {
         <span>${printer.media_type === "thermal" ? "CON RIBBON" : "TÉRMICA DIRECTA"}</span>
       </div>
       <div class="printer-actions">
+        <button class="btn btn-secondary" data-action="rename" data-printer="${escapeHtml(printer.name)}">Cambiar nombre</button>
         <button class="btn btn-secondary" data-action="test" data-printer="${escapeHtml(printer.name)}">Prueba</button>
         <button class="btn btn-quiet" data-action="calibrate" data-printer="${escapeHtml(printer.name)}">Calibrar</button>
         <button class="btn btn-secondary" data-action="diagnose" data-printer="${escapeHtml(printer.name)}">Diagnosticar</button>
@@ -286,6 +287,7 @@ $("#printer-grid")?.addEventListener("click", async (event) => {
     diagnose: "diagnóstico",
     purge: "vaciado",
     repair: "reparación",
+    rename: "cambio de nombre",
     delete: "eliminación"
   };
   const confirmations = {
@@ -316,9 +318,20 @@ $("#printer-grid")?.addEventListener("click", async (event) => {
     diagnose: "Diagnosticando…",
     purge: "Vaciando…",
     repair: "Reparando…",
+    rename: "Abriendo…",
     delete: "Eliminando…"
   };
   const originalText = button.textContent;
+  if (action === "rename") {
+    $("#rename-old-name").value = printer;
+    $("#rename-new-name").value = printer;
+    $("#rename-message").textContent = "";
+    $("#rename-message").className = "form-message";
+    $("#rename-printer-dialog").showModal();
+    $("#rename-new-name").focus();
+    $("#rename-new-name").select();
+    return;
+  }
   button.disabled = true;
   if (confirmations[action]) {
     button.textContent = "Esperando confirmación…";
@@ -438,6 +451,55 @@ $("#add-printer-form")?.addEventListener("submit", async (event) => {
 });
 
 $("#refresh-button")?.addEventListener("click", refresh);
+
+function closeRenameDialog() {
+  const dialog = $("#rename-printer-dialog");
+  if (dialog?.open) dialog.close();
+}
+
+document.querySelectorAll("[data-close-rename]").forEach((button) => {
+  button.addEventListener("click", closeRenameDialog);
+});
+
+$("#rename-printer-dialog")?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeRenameDialog();
+});
+
+$("#rename-printer-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const oldName = $("#rename-old-name").value;
+  const newName = $("#rename-new-name").value.trim();
+  const submit = $("#rename-submit");
+  const message = $("#rename-message");
+  submit.disabled = true;
+  submit.textContent = "Renombrando…";
+  message.textContent = "Actualizando la cola y su publicación en la red…";
+  message.className = "form-message";
+  try {
+    const data = await api(`/api/printers/${encodeURIComponent(oldName)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName })
+    });
+    closeRenameDialog();
+    toast(data.message || "Impresora renombrada");
+    await refresh();
+  } catch (error) {
+    message.textContent = error.message;
+    message.className = "form-message error";
+  } finally {
+    submit.disabled = false;
+    submit.textContent = "Guardar nombre";
+  }
+});
+
+$("#jobs-export")?.addEventListener("click", () => {
+  const query = new URLSearchParams(jobsQuery());
+  query.delete("page");
+  query.delete("page_size");
+  window.location.href = `/api/jobs/export.xlsx?${query.toString()}`;
+});
 
 $("#job-filters")?.addEventListener("submit", async (event) => {
   event.preventDefault();

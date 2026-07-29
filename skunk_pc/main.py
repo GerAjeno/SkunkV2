@@ -6,6 +6,7 @@ import os
 import socket
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import (
@@ -17,7 +18,13 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -47,7 +54,8 @@ from .cups import (
     validate_printer_name,
 )
 from .database import init_database
-from .jobs import cancel_job, create_job, list_all_jobs
+from .excel import build_history_xlsx
+from .jobs import cancel_job, create_job, filtered_jobs, list_all_jobs
 
 
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -87,6 +95,10 @@ class AddPrinterRequest(BaseModel):
     uri: str = Field(min_length=8, max_length=500)
     language: str = Field(pattern="^(epl2|zpl)$")
     media_type: str = Field(default="direct", pattern="^(thermal|direct)$")
+
+
+class RenamePrinterRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=63)
 
 
 def _server_ip() -> str:
@@ -294,6 +306,45 @@ async def api_jobs(
     return {"ok": True, **history}
 
 
+@app.get("/api/jobs/export.xlsx")
+async def api_export_jobs(
+    request: Request,
+    printer: str = "",
+    result: str = "",
+    origin: str = "",
+    created_after: str = "",
+    created_before: str = "",
+):
+    require_authenticated(request)
+    if result and result not in {
+        "queued",
+        "processing",
+        "submitted",
+        "completed",
+        "failed",
+        "cancelled",
+    }:
+        raise HTTPException(status_code=400, detail="Resultado inválido")
+    history = await asyncio.to_thread(
+        filtered_jobs,
+        printer=printer,
+        status=result,
+        origin=origin,
+        created_after=created_after,
+        created_before=created_before,
+    )
+    workbook = await asyncio.to_thread(build_history_xlsx, history)
+    filename = datetime.now().strftime("historial-skunk-pc-%Y%m%d-%H%M%S.xlsx")
+    return Response(
+        content=workbook,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument."
+            "spreadsheetml.sheet"
+        ),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 async def _save_upload(upload: UploadFile) -> Path:
     original_name = Path(upload.filename or "documento").name
     suffix = Path(original_name).suffix.lower()
@@ -459,6 +510,29 @@ async def api_add_printer(payload: AddPrinterRequest, request: Request):
         payload.media_type,
     )
     return {"ok": True, "message": output or "Impresora agregada"}
+
+
+@app.put("/api/printers/{printer_name}")
+async def api_rename_printer(
+    printer_name: str,
+    payload: RenamePrinterRequest,
+    request: Request,
+):
+    require_csrf(request)
+    old_name = validate_printer_name(printer_name)
+    new_name = validate_printer_name(payload.name)
+    printer = await asyncio.to_thread(get_printer, old_name)
+    uri = printer.physical_uri or printer.uri
+    output = await asyncio.to_thread(
+        run_admin_helper,
+        "rename",
+        old_name,
+        new_name,
+        uri,
+        printer.language,
+        printer.media_type,
+    )
+    return {"ok": True, "message": output or "Impresora renombrada"}
 
 
 @app.delete("/api/printers/{printer_name}")

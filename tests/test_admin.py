@@ -88,3 +88,42 @@ def test_native_job_origins_extracts_ip_printer_and_time(tmp_path) -> None:
             "created_at": "2026-07-27T18:00:04+00:00",
         }
     ]
+
+
+def test_rename_creates_new_queue_then_removes_old(monkeypatch) -> None:
+    commands: list[list[str]] = []
+    configured: list[tuple[str, str, str, str]] = []
+
+    def fake_run_command(arguments, **_kwargs):
+        commands.append(arguments)
+        if arguments == ["lpstat", "-p", "Zima"]:
+            return CommandResult(1, "", "no existe")
+        if arguments == ["lpstat", "-p", "Gabriela"] and len(commands) > 4:
+            return CommandResult(1, "", "no existe")
+        return CommandResult(0, "", "")
+
+    monkeypatch.setattr(admin, "run_command", fake_run_command)
+    monkeypatch.setattr(
+        admin,
+        "_configure",
+        lambda *args: configured.append(args),
+    )
+
+    message = admin.dispatch(
+        "rename",
+        ["Gabriela", "Zima", "usb://Zebra/TLP2844", "epl2", "thermal"],
+    )
+
+    assert configured == [("Zima", "usb://Zebra/TLP2844", "epl2", "thermal")]
+    assert ["cancel", "-a", "-x", "Gabriela"] in commands
+    assert ["lpadmin", "-x", "Gabriela"] in commands
+    assert message == "Impresora Gabriela renombrada como Zima"
+
+
+def test_native_job_pages_reads_retained_pdf_metadata(monkeypatch, tmp_path) -> None:
+    (tmp_path / "d00026-001").write_bytes(
+        b"%PDF /Type /Pages /Count 3 "
+        b"/Type /Page /Type /Page /Type /Page"
+    )
+
+    assert admin._native_job_pages(tmp_path) == {"26": 3}

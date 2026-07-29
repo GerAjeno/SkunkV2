@@ -305,6 +305,8 @@ input:focus, select:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgb
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
+
+.heading-actions { display: flex; align-items: center; gap: 10px; }
 .diagnostic-result {
   max-height: min(55vh, 520px);
   margin: 0;
