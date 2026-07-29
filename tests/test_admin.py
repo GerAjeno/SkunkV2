@@ -35,6 +35,43 @@ def test_purge_cancels_all_jobs_without_deleting_printer(monkeypatch) -> None:
     assert message == "Trabajos y registros fallidos de Gabriela eliminados"
 
 
+def test_delete_cancels_jobs_removes_queue_and_verifies_result(monkeypatch) -> None:
+    commands: list[list[str]] = []
+
+    def fake_run_command(arguments, **_kwargs):
+        commands.append(arguments)
+        if arguments == ["lpstat", "-p", "Gabriela"] and len(commands) == 4:
+            return CommandResult(1, "", "no existe")
+        return CommandResult(0, "", "")
+
+    monkeypatch.setattr(admin, "run_command", fake_run_command)
+
+    message = admin.dispatch("delete", ["Gabriela"])
+
+    assert commands == [
+        ["lpstat", "-p", "Gabriela"],
+        ["cancel", "-a", "-x", "Gabriela"],
+        ["lpadmin", "-x", "Gabriela"],
+        ["lpstat", "-p", "Gabriela"],
+    ]
+    assert message == "Impresora Gabriela y su configuración fueron eliminadas"
+
+
+def test_delete_fails_when_cups_keeps_queue(monkeypatch) -> None:
+    monkeypatch.setattr(
+        admin,
+        "run_command",
+        lambda _arguments, **_kwargs: CommandResult(0, "", ""),
+    )
+
+    try:
+        admin.dispatch("delete", ["Gabriela"])
+    except Exception as exc:
+        assert str(exc) == "CUPS mantuvo la cola después de solicitar su eliminación"
+    else:
+        raise AssertionError("La eliminación debía fallar si la cola seguía presente")
+
+
 def test_native_job_origins_extracts_ip_printer_and_time(tmp_path) -> None:
     access_log = tmp_path / "access_log"
     access_log.write_text(

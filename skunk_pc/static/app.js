@@ -32,6 +32,37 @@ function toast(message) {
   toastTimer = setTimeout(() => element.classList.remove("visible"), 3600);
 }
 
+let confirmationResolver = null;
+
+function finishConfirmation(accepted) {
+  const dialog = $("#confirmation-dialog");
+  if (dialog?.open) dialog.close();
+  const resolve = confirmationResolver;
+  confirmationResolver = null;
+  resolve?.(accepted);
+}
+
+function askConfirmation({ title, message, confirmLabel, dangerous = false }) {
+  const dialog = $("#confirmation-dialog");
+  if (!dialog) return Promise.resolve(false);
+  $("#confirmation-title").textContent = title;
+  $("#confirmation-message").textContent = message;
+  const confirmButton = $("#confirmation-accept");
+  confirmButton.textContent = confirmLabel;
+  confirmButton.className = dangerous ? "btn btn-danger" : "btn btn-primary";
+  dialog.showModal();
+  return new Promise((resolve) => {
+    confirmationResolver = resolve;
+  });
+}
+
+$("#confirmation-cancel")?.addEventListener("click", () => finishConfirmation(false));
+$("#confirmation-accept")?.addEventListener("click", () => finishConfirmation(true));
+$("#confirmation-dialog")?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  finishConfirmation(false);
+});
+
 function statusBadge(printer) {
   if (!printer.connected || printer.state === "disconnected") {
     return '<span class="status-pill danger">Desconectada</span>';
@@ -257,25 +288,50 @@ $("#printer-grid")?.addEventListener("click", async (event) => {
     repair: "reparación",
     delete: "eliminación"
   };
-  if (
-    action === "calibrate" &&
-    !window.confirm("La impresora avanzará varias etiquetas. ¿Continuar?")
-  ) return;
-  if (
-    action === "purge" &&
-    !window.confirm(
-      `Se cancelarán todos los trabajos pendientes de ${printer}. ` +
-      "La impresora y su configuración permanecerán. ¿Continuar?"
-    )
-  ) return;
-  if (
-    action === "delete" &&
-    !window.confirm(
-      `Se eliminará ${printer}, su cola y toda su configuración de CUPS. ` +
-      "Esta acción no elimina otras impresoras. ¿Continuar?"
-    )
-  ) return;
+  const confirmations = {
+    calibrate: {
+      title: `Calibrar ${printer}`,
+      message: "La impresora avanzará varias etiquetas durante la calibración.",
+      confirmLabel: "Calibrar"
+    },
+    purge: {
+      title: `Vaciar trabajos de ${printer}`,
+      message:
+        `Se cancelarán todos los trabajos pendientes de ${printer}. ` +
+        "La impresora y su configuración permanecerán.",
+      confirmLabel: "Vaciar trabajos"
+    },
+    delete: {
+      title: `Eliminar ${printer}`,
+      message:
+        `Se eliminará ${printer}, todos sus trabajos, su cola y toda su ` +
+        "configuración de CUPS. Esta acción no elimina otras impresoras.",
+      confirmLabel: "Eliminar definitivamente",
+      dangerous: true
+    }
+  };
+  const progressLabels = {
+    test: "Enviando prueba…",
+    calibrate: "Calibrando…",
+    diagnose: "Diagnosticando…",
+    purge: "Vaciando…",
+    repair: "Reparando…",
+    delete: "Eliminando…"
+  };
+  const originalText = button.textContent;
   button.disabled = true;
+  if (confirmations[action]) {
+    button.textContent = "Esperando confirmación…";
+    const accepted = await askConfirmation(confirmations[action]);
+    if (!accepted) {
+      button.disabled = false;
+      button.textContent = originalText;
+      return;
+    }
+  }
+  button.classList.add("busy");
+  button.textContent = progressLabels[action] || "Procesando…";
+  toast(`${progressLabels[action] || "Procesando…"} ${printer}`);
   try {
     const method = action === "delete" ? "DELETE" : "POST";
     const path = action === "delete"
@@ -293,7 +349,11 @@ $("#printer-grid")?.addEventListener("click", async (event) => {
   } catch (error) {
     toast(error.message);
   } finally {
-    button.disabled = false;
+    if (button.isConnected) {
+      button.disabled = false;
+      button.classList.remove("busy");
+      button.textContent = originalText;
+    }
   }
 });
 

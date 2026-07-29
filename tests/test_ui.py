@@ -17,7 +17,7 @@ def test_add_printer_cancel_buttons_do_not_submit_form() -> None:
 def test_static_cache_is_current() -> None:
     service_worker = (PACKAGE_DIR / "static" / "sw.js").read_text()
 
-    assert 'const CACHE = "skunk-pc-static-v13";' in service_worker
+    assert 'const CACHE = "skunk-pc-static-v14";' in service_worker
 
 
 def test_add_printer_marks_missing_serials_and_installed_devices() -> None:
@@ -94,5 +94,18 @@ def test_printer_management_actions_are_available() -> None:
     assert 'data-action="purge"' in javascript
     assert 'data-action="delete"' in javascript
     assert "Se cancelarán todos los trabajos pendientes" in javascript
-    assert "su cola y toda su configuración de CUPS" in javascript
+    assert "todos sus trabajos, su cola" in javascript
+    assert "configuración de CUPS" in javascript
     assert 'id="diagnostic-dialog"' in template
+
+
+def test_printer_actions_use_visible_confirmation_and_progress() -> None:
+    javascript = (PACKAGE_DIR / "static" / "app.js").read_text()
+    template = (PACKAGE_DIR / "templates" / "index.html").read_text()
+
+    assert 'id="confirmation-dialog"' in template
+    assert 'id="confirmation-accept"' in template
+    assert 'confirmLabel: "Eliminar definitivamente"' in javascript
+    assert 'delete: "Eliminando…"' in javascript
+    assert 'button.textContent = "Esperando confirmación…";' in javascript
+    assert "window.confirm" not in javascript
