@@ -127,6 +127,10 @@
           <h2>Trabajos recientes</h2>
         </div>
         <div class="heading-actions">
+          <button id="mobile-filters-toggle" class="btn btn-quiet mobile-only"
+            type="button" aria-expanded="false" aria-controls="job-filters">
+            Filtros
+          </button>
           <button id="jobs-export" class="btn btn-secondary" type="button">Exportar Excel</button>
           <button id="refresh-button" class="btn btn-quiet" type="button">Actualizar</button>
         </div>
@@ -179,7 +183,7 @@
             <tr><th>Trabajo</th><th>Origen</th><th>Impresora</th><th>Resultado</th><th>Páginas</th><th>Hora</th></tr>
           </thead>
           <tbody id="jobs-body">
-            <tr><td colspan="6" class="muted">Sin trabajos todavía.</td></tr>
+            <tr class="empty-job-row"><td colspan="6" class="muted">Sin trabajos todavía.</td></tr>
           </tbody>
         </table>
       </div>

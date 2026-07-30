@@ -17,7 +17,7 @@ def test_add_printer_cancel_buttons_do_not_submit_form() -> None:
 def test_static_cache_is_current() -> None:
     service_worker = (PACKAGE_DIR / "static" / "sw.js").read_text()
 
-    assert 'const CACHE = "skunk-pc-static-v16";' in service_worker
+    assert 'const CACHE = "skunk-pc-static-v17";' in service_worker
 
 
 def test_add_printer_marks_missing_serials_and_installed_devices() -> None:
@@ -84,6 +84,21 @@ def test_job_history_has_filters_page_sizes_and_navigation() -> None:
     assert 'id="jobs-previous"' in template
     assert 'id="jobs-next"' in template
     assert 'page_size: $("#jobs-page-size").value' in javascript
+
+
+def test_mobile_history_uses_cards_and_collapsible_filters() -> None:
+    template = (PACKAGE_DIR / "templates" / "index.html").read_text()
+    javascript = (PACKAGE_DIR / "static" / "app.js").read_text()
+    stylesheet = (PACKAGE_DIR / "static" / "app.css").read_text()
+
+    assert 'id="mobile-filters-toggle"' in template
+    assert 'aria-controls="job-filters"' in template
+    assert 'data-label="Trabajo"' in javascript
+    assert 'data-label="Origen"' in javascript
+    assert 'data-label="Resultado"' in javascript
+    assert 'classList.toggle("mobile-open")' in javascript
+    assert "content: attr(data-label)" in stylesheet
+    assert ".job-filters:not(.mobile-open)" in stylesheet
 
 
 def test_printer_management_actions_are_available() -> None:

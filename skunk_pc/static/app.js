@@ -138,7 +138,7 @@ function renderJobs(data) {
   const jobs = data.jobs;
   const body = $("#jobs-body");
   if (!jobs.length) {
-    body.innerHTML = '<tr><td colspan="6" class="muted">Sin trabajos todavía.</td></tr>';
+    body.innerHTML = '<tr class="empty-job-row"><td colspan="6" class="muted">Sin trabajos todavía.</td></tr>';
   } else {
     body.innerHTML = jobs.map((job) => {
       const date = new Date(job.created_at);
@@ -153,12 +153,12 @@ function renderJobs(data) {
       };
       return `
         <tr>
-          <td>${escapeHtml(job.original_name)}</td>
-          <td>${escapeHtml(job.source_device || "Origen no informado")}</td>
-          <td>${escapeHtml(job.printer_name)}</td>
-          <td><span class="job-state ${escapeHtml(job.status)}">${escapeHtml(labels[job.status] || job.status)}</span>${error}</td>
-          <td>${escapeHtml(job.pages)}</td>
-          <td>${date.toLocaleString("es-CL", {
+          <td data-label="Trabajo">${escapeHtml(job.original_name)}</td>
+          <td data-label="Origen">${escapeHtml(job.source_device || "Origen no informado")}</td>
+          <td data-label="Impresora">${escapeHtml(job.printer_name)}</td>
+          <td data-label="Resultado"><span class="job-state ${escapeHtml(job.status)}">${escapeHtml(labels[job.status] || job.status)}</span>${error}</td>
+          <td data-label="Páginas">${escapeHtml(job.pages)}</td>
+          <td data-label="Hora">${date.toLocaleString("es-CL", {
             year: "2-digit",
             month: "2-digit",
             day: "2-digit",
@@ -499,6 +499,14 @@ $("#jobs-export")?.addEventListener("click", () => {
   query.delete("page");
   query.delete("page_size");
   window.location.href = `/api/jobs/export.xlsx?${query.toString()}`;
+});
+
+const mobileFiltersToggle = $("#mobile-filters-toggle");
+mobileFiltersToggle?.addEventListener("click", () => {
+  const filters = $("#job-filters");
+  const isOpen = filters.classList.toggle("mobile-open");
+  mobileFiltersToggle.setAttribute("aria-expanded", String(isOpen));
+  mobileFiltersToggle.textContent = isOpen ? "Ocultar filtros" : "Filtros";
 });
 
 $("#job-filters")?.addEventListener("submit", async (event) => {
