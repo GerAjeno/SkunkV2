@@ -54,8 +54,22 @@ ON print_history(created_at);
 """
 
 
+class ClosingConnection(sqlite3.Connection):
+    """SQLite connection whose context manager also releases the file."""
+
+    def __exit__(self, exc_type, exc_value, traceback) -> bool:
+        try:
+            return bool(super().__exit__(exc_type, exc_value, traceback))
+        finally:
+            self.close()
+
+
 def connect(path: Path | None = None) -> sqlite3.Connection:
-    db = sqlite3.connect(path or settings.database_path, timeout=15)
+    db = sqlite3.connect(
+        path or settings.database_path,
+        timeout=15,
+        factory=ClosingConnection,
+    )
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys=ON")
     db.execute("PRAGMA busy_timeout=15000")
