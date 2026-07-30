@@ -674,6 +674,7 @@ def run_admin_helper(action: str, *arguments: str) -> str:
         "purge",
         "configure",
         "enable",
+        "reboot",
     }
     if action not in allowed_actions:
         raise CupsError("Acción administrativa inválida")

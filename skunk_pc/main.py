@@ -73,7 +73,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="Skunk PC",
-    version="0.1.0",
+    version="0.1.1",
     docs_url=None,
     redoc_url=None,
     lifespan=lifespan,
@@ -433,6 +433,13 @@ async def api_cancel_job(job_id: str, request: Request):
     if not await asyncio.to_thread(cancel_job, job_id):
         raise HTTPException(status_code=409, detail="El trabajo ya está en procesamiento")
     return {"ok": True}
+
+
+@app.post("/api/system/reboot")
+async def api_reboot_system(request: Request):
+    require_csrf(request)
+    output = await asyncio.to_thread(run_admin_helper, "reboot")
+    return {"ok": True, "message": output or "Reinicio del servidor programado"}
 
 
 @app.post("/api/printers/{printer_name}/test")

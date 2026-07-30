@@ -17,7 +17,7 @@ def test_add_printer_cancel_buttons_do_not_submit_form() -> None:
 def test_static_cache_is_current() -> None:
     service_worker = (PACKAGE_DIR / "static" / "sw.js").read_text()
 
-    assert 'const CACHE = "skunk-pc-static-v15";' in service_worker
+    assert 'const CACHE = "skunk-pc-static-v16";' in service_worker
 
 
 def test_add_printer_marks_missing_serials_and_installed_devices() -> None:
@@ -120,3 +120,22 @@ def test_printer_actions_use_visible_confirmation_and_progress() -> None:
     assert 'delete: "Eliminando…"' in javascript
     assert 'button.textContent = "Esperando confirmación…";' in javascript
     assert "window.confirm" not in javascript
+
+
+def test_reboot_button_blocks_page_and_reconnects_after_three_minutes() -> None:
+    javascript = (PACKAGE_DIR / "static" / "app.js").read_text()
+    template = (PACKAGE_DIR / "templates" / "index.html").read_text()
+    stylesheet = (PACKAGE_DIR / "static" / "app.css").read_text()
+    backend = (PACKAGE_DIR / "main.py").read_text()
+
+    assert template.index('id="reboot-button"') < template.index('id="theme-toggle"')
+    assert 'id="reboot-overlay"' in template
+    assert 'id="reboot-countdown"' in template
+    assert "const REBOOT_DURATION_MS = 3 * 60 * 1000;" in javascript
+    assert 'api("/api/system/reboot", { method: "POST" })' in javascript
+    assert "showRebootOverlay(deadline);" in javascript
+    assert 'fetch("/api/status"' in javascript
+    assert "window.location.reload();" in javascript
+    assert ".reboot-overlay" in stylesheet
+    assert '@app.post("/api/system/reboot")' in backend
+    assert 'run_admin_helper, "reboot"' in backend

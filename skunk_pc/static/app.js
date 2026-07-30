@@ -529,6 +529,88 @@ $("#jobs-next")?.addEventListener("click", async () => {
   await refresh();
 });
 
+const REBOOT_DURATION_MS = 3 * 60 * 1000;
+const REBOOT_DEADLINE_KEY = "skunk-reboot-deadline";
+let rebootTimer = null;
+let rebootReconnectTimer = null;
+
+function formatCountdown(milliseconds) {
+  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
+async function reconnectAfterReboot() {
+  $("#reboot-countdown").textContent = "00:00";
+  $("#reboot-message").textContent = "El tiempo estimado terminó. Reconectando con Skunk PC…";
+  try {
+    const response = await fetch("/api/status", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    if (response.ok) {
+      localStorage.removeItem(REBOOT_DEADLINE_KEY);
+      window.location.reload();
+      return;
+    }
+  } catch (_) {
+    // El servidor puede seguir arrancando; se vuelve a intentar automáticamente.
+  }
+  rebootReconnectTimer = setTimeout(reconnectAfterReboot, 5000);
+}
+
+function showRebootOverlay(deadline) {
+  const overlay = $("#reboot-overlay");
+  if (!overlay) return;
+  overlay.hidden = false;
+  document.body.classList.add("rebooting");
+  clearInterval(rebootTimer);
+  clearTimeout(rebootReconnectTimer);
+
+  const updateCountdown = () => {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      clearInterval(rebootTimer);
+      reconnectAfterReboot();
+      return;
+    }
+    $("#reboot-countdown").textContent = formatCountdown(remaining);
+  };
+  updateCountdown();
+  rebootTimer = setInterval(updateCountdown, 250);
+}
+
+$("#reboot-button")?.addEventListener("click", async (event) => {
+  const accepted = await askConfirmation({
+    title: "Reiniciar el servidor",
+    message: "Se interrumpirán temporalmente la página y las impresiones. ¿Quieres reiniciar el PC ahora?",
+    confirmLabel: "Reiniciar ahora",
+    dangerous: true,
+  });
+  if (!accepted) return;
+
+  const button = event.currentTarget;
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "Programando…";
+  try {
+    await api("/api/system/reboot", { method: "POST" });
+    const deadline = Date.now() + REBOOT_DURATION_MS;
+    localStorage.setItem(REBOOT_DEADLINE_KEY, String(deadline));
+    showRebootOverlay(deadline);
+  } catch (error) {
+    toast(error.message);
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
+});
+
+const storedRebootDeadline = Number(localStorage.getItem(REBOOT_DEADLINE_KEY));
+if (Number.isFinite(storedRebootDeadline) && storedRebootDeadline > 0) {
+  showRebootOverlay(storedRebootDeadline);
+}
+
 $("#theme-toggle")?.addEventListener("click", () => {
   const current = document.documentElement.dataset.theme || "dark";
   const next = current === "dark" ? "light" : "dark";

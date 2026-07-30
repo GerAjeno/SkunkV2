@@ -17,6 +17,33 @@ def test_add_response_includes_selected_media_type(monkeypatch) -> None:
     )
 
 
+def test_reboot_is_scheduled_without_accepting_arguments(monkeypatch) -> None:
+    commands: list[tuple[list[str], int | None]] = []
+
+    def fake_run_command(arguments, timeout=None, **_kwargs):
+        commands.append((arguments, timeout))
+        return CommandResult(0, "", "")
+
+    monkeypatch.setattr(admin, "run_command", fake_run_command)
+
+    message = admin.dispatch("reboot", [])
+
+    assert commands == [
+        (
+            [
+                "systemd-run",
+                "--unit=skunk-pc-reboot",
+                "--on-active=2s",
+                "--collect",
+                "systemctl",
+                "reboot",
+            ],
+            10,
+        )
+    ]
+    assert message == "Reinicio del servidor programado"
+
+
 def test_purge_cancels_all_jobs_without_deleting_printer(monkeypatch) -> None:
     commands: list[list[str]] = []
 

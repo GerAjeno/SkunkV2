@@ -170,6 +170,24 @@ def _configure(name: str, uri: str, language: str, media_type: str) -> None:
 
 
 def dispatch(action: str, arguments: list[str]) -> str:
+    if action == "reboot":
+        if arguments:
+            raise CupsError("El reinicio no acepta parámetros")
+        require_success(
+            run_command(
+                [
+                    "systemd-run",
+                    "--unit=skunk-pc-reboot",
+                    "--on-active=2s",
+                    "--collect",
+                    "systemctl",
+                    "reboot",
+                ],
+                timeout=10,
+            ),
+            "No se pudo programar el reinicio del servidor",
+        )
+        return "Reinicio del servidor programado"
     if action == "job-origins":
         if arguments:
             raise CupsError("La consulta de orígenes no acepta parámetros")

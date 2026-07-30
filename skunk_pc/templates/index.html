@@ -22,6 +22,7 @@
     </a>
     <div class="topbar-actions">
       <span id="cups-badge" class="status-pill neutral">CUPS…</span>
+      <button id="reboot-button" class="btn btn-warning" type="button">↻ Reiniciar</button>
       <button id="theme-toggle" class="btn btn-quiet" type="button">☀️ Tema</button>
       <form method="post" action="/logout">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
@@ -289,6 +290,17 @@
       </div>
     </div>
   </dialog>
+
+  <div id="reboot-overlay" class="reboot-overlay" role="alert" aria-live="assertive" hidden>
+    <div class="reboot-panel">
+      <div class="reboot-spinner" aria-hidden="true"></div>
+      <p class="eyebrow">REINICIANDO SERVIDOR</p>
+      <h2>Skunk PC se está reiniciando</h2>
+      <p id="reboot-message">La página permanecerá bloqueada mientras vuelve el sistema.</p>
+      <strong id="reboot-countdown" class="reboot-countdown">03:00</strong>
+      <small>No apagues ni desconectes el equipo.</small>
+    </div>
+  </div>
 
   <div id="toast" class="toast" role="status"></div>
   <script src="/static/app.js" defer></script>
