@@ -17,7 +17,7 @@ def test_add_printer_cancel_buttons_do_not_submit_form() -> None:
 def test_static_cache_is_current() -> None:
     service_worker = (PACKAGE_DIR / "static" / "sw.js").read_text()
 
-    assert 'const CACHE = "skunk-pc-static-v17";' in service_worker
+    assert 'const CACHE = "skunk-pc-static-v18";' in service_worker
 
 
 def test_add_printer_marks_missing_serials_and_installed_devices() -> None:
@@ -148,6 +148,10 @@ def test_reboot_button_blocks_page_and_reconnects_after_three_minutes() -> None:
     assert 'id="reboot-countdown"' in template
     assert "const REBOOT_DURATION_MS = 3 * 60 * 1000;" in javascript
     assert 'api("/api/system/reboot", { method: "POST" })' in javascript
+    assert (
+        javascript.index("const button = event.currentTarget;")
+        < javascript.index("const accepted = await askConfirmation({")
+    )
     assert "showRebootOverlay(deadline);" in javascript
     assert 'fetch("/api/status"' in javascript
     assert "window.location.reload();" in javascript

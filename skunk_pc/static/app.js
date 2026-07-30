@@ -590,6 +590,9 @@ function showRebootOverlay(deadline) {
 }
 
 $("#reboot-button")?.addEventListener("click", async (event) => {
+  // currentTarget is cleared by the browser after the first await. Keep the
+  // button reference now so the confirmed action can continue reliably.
+  const button = event.currentTarget;
   const accepted = await askConfirmation({
     title: "Reiniciar el servidor",
     message: "Se interrumpirán temporalmente la página y las impresiones. ¿Quieres reiniciar el PC ahora?",
@@ -598,7 +601,6 @@ $("#reboot-button")?.addEventListener("click", async (event) => {
   });
   if (!accepted) return;
 
-  const button = event.currentTarget;
   const originalLabel = button.textContent;
   button.disabled = true;
   button.textContent = "Programando…";
