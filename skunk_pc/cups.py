@@ -11,9 +11,10 @@ import subprocess
 import threading
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, tzinfo
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .config import settings
 from .schemas import Printer, UsbPrinter
@@ -346,15 +347,29 @@ def _active_job_lines(output: str) -> list[str]:
     return jobs
 
 
-def _cups_datetime(value: str) -> str:
+def _system_timezone(timezone_file: Path = Path("/etc/timezone")) -> tzinfo:
+    """Return the configured system timezone, including historical DST rules."""
+    try:
+        timezone_name = timezone_file.read_text(encoding="utf-8").strip()
+        if timezone_name:
+            return ZoneInfo(timezone_name)
+    except (OSError, ZoneInfoNotFoundError, ValueError):
+        pass
+    return datetime.now().astimezone().tzinfo or UTC
+
+
+def _cups_datetime(value: str, *, local_timezone: tzinfo | None = None) -> str:
+    """Convert the timezone-less local timestamp printed by lpstat to UTC."""
     value = value.strip()
+    timezone = local_timezone or _system_timezone()
     for pattern in (
         "%a %d %b %Y %H:%M:%S",
         "%a %d %b %Y %I:%M:%S %p %Z",
         "%a %b %d %H:%M:%S %Y",
     ):
         try:
-            return datetime.strptime(value, pattern).replace(tzinfo=UTC).isoformat()
+            parsed = datetime.strptime(value, pattern).replace(tzinfo=timezone)
+            return parsed.astimezone(UTC).isoformat()
         except ValueError:
             continue
     return datetime.now(UTC).isoformat()

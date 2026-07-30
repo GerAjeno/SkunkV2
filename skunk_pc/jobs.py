@@ -87,6 +87,7 @@ def sync_cups_history() -> None:
                     status = excluded.status,
                     pages = excluded.pages,
                     error = excluded.error,
+                    created_at = excluded.created_at,
                     updated_at = excluded.updated_at
                 """,
                 (

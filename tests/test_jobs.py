@@ -110,6 +110,35 @@ def test_list_all_jobs_merges_native_jobs_and_updates_web_result(
     assert result["total"] == 2
 
 
+def test_sync_cups_history_corrects_previously_stored_timestamp(
+    monkeypatch, tmp_path
+) -> None:
+    path = tmp_path / "jobs.db"
+    database.init_database(path)
+    monkeypatch.setattr(jobs, "connect", lambda: database.connect(path))
+    native_job = {
+        "cups_job_id": "Estacion-1-67",
+        "printer_name": "Estacion-1",
+        "original_name": "Trabajo nativo Estacion-1-67",
+        "source_device": "IP 192.168.1.199",
+        "status": "completed",
+        "pages": 1,
+        "error": None,
+        "created_at": "2026-07-30T18:17:47+00:00",
+    }
+    monkeypatch.setattr(jobs, "list_cups_jobs", lambda _limit: [native_job])
+    jobs.sync_cups_history()
+
+    native_job["created_at"] = "2026-07-30T22:17:47+00:00"
+    jobs.sync_cups_history()
+
+    with database.connect(path) as db:
+        created_at = db.execute(
+            "SELECT created_at FROM print_history WHERE id = 'Estacion-1-67'"
+        ).fetchone()["created_at"]
+    assert created_at == "2026-07-30T22:17:47+00:00"
+
+
 def test_list_all_jobs_filters_and_paginates(monkeypatch, tmp_path) -> None:
     path = _history_database(monkeypatch, tmp_path)
     with database.connect(path) as db:

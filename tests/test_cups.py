@@ -1,4 +1,5 @@
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -28,6 +29,15 @@ network socket
     assert parse_lpinfo_devices(output) == [
         "usb://Zebra%20Technologies/ZTC%20GC420t%20(EPL)?serial=ABC123"
     ]
+
+
+def test_cups_local_datetime_is_converted_to_utc() -> None:
+    converted = cups._cups_datetime(
+        "Thu 30 Jul 2026 18:17:47",
+        local_timezone=ZoneInfo("America/Santiago"),
+    )
+
+    assert converted == "2026-07-30T22:17:47+00:00"
 
 
 def test_parse_zebra_uri() -> None:
