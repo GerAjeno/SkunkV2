@@ -246,6 +246,38 @@ def _sortable_datetime(value: object) -> datetime:
         return datetime.min.replace(tzinfo=UTC)
 
 
+def recover_interrupted_jobs() -> list[dict]:
+    """Fail jobs owned by the previous worker process after a restart.
+
+    Skunk PC runs a single systemd-managed worker. Therefore, any row still
+    marked as processing before the new worker begins claiming jobs belongs to
+    the process that just stopped. Retrying it could duplicate labels if CUPS
+    accepted part of the submission before the interruption.
+    """
+    finished_at = utc_now()
+    with transaction() as db:
+        rows = db.execute(
+            "SELECT * FROM jobs WHERE status = 'processing' ORDER BY created_at"
+        ).fetchall()
+        if not rows:
+            return []
+        db.execute(
+            """
+            UPDATE jobs
+            SET status = 'failed',
+                error = ?,
+                finished_at = ?
+            WHERE status = 'processing'
+            """,
+            (
+                "Trabajo interrumpido por el reinicio del servidor; "
+                "no se reenvió para evitar etiquetas duplicadas",
+                finished_at,
+            ),
+        )
+    return [dict(row) for row in rows]
+
+
 def claim_next_job() -> dict | None:
     with transaction() as db:
         row = db.execute(

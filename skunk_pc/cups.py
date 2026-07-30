@@ -387,6 +387,19 @@ def _parse_detailed_jobs(output: str) -> list[dict]:
     return jobs
 
 
+def _cups_job_sort_key(job: dict) -> tuple[int, float]:
+    numeric_id = str(job.get("cups_job_id", "")).rpartition("-")[2]
+    try:
+        job_number = int(numeric_id)
+    except ValueError:
+        job_number = -1
+    try:
+        created_at = datetime.fromisoformat(str(job.get("created_at", ""))).timestamp()
+    except ValueError:
+        created_at = 0.0
+    return job_number, created_at
+
+
 def list_cups_jobs(limit: int = 100) -> list[dict]:
     """Read recent jobs accepted directly by CUPS, including native IPP."""
     all_result = run_command(["lpstat", "-W", "all", "-l", "-o"])
@@ -429,9 +442,12 @@ def list_cups_jobs(limit: int = 100) -> list[dict]:
         else:
             job["status"] = "queued"
             job["error"] = None
+    requested_limit = min(max(limit, 1), 500)
+    jobs.sort(key=_cups_job_sort_key, reverse=True)
+    jobs = jobs[:requested_limit]
     _attach_native_pages(jobs)
     _attach_native_origins(jobs)
-    return jobs[: min(max(limit, 1), 500)]
+    return jobs
 
 
 def _attach_native_origins(jobs: list[dict]) -> None:

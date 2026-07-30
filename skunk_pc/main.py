@@ -73,7 +73,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="Skunk PC",
-    version="0.1.1",
+    version="0.1.2",
     docs_url=None,
     redoc_url=None,
     lifespan=lifespan,

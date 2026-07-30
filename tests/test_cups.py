@@ -245,13 +245,41 @@ def test_list_cups_jobs_reports_native_origin_and_error(monkeypatch) -> None:
     )
 
     jobs = list_cups_jobs()
+    jobs_by_id = {job["cups_job_id"]: job for job in jobs}
 
-    assert jobs[0]["source_device"] == "CUPS nativo · android-phone"
-    assert jobs[0]["printer_name"] == "Zima"
-    assert jobs[0]["status"] == "failed"
-    assert jobs[0]["error"] == "No pages were found."
-    assert jobs[1]["status"] == "completed"
-    assert jobs[1]["pages"] == 1
+    assert [job["cups_job_id"] for job in jobs] == ["Zima-13", "Zima-12"]
+    assert jobs_by_id["Zima-12"]["source_device"] == "CUPS nativo · android-phone"
+    assert jobs_by_id["Zima-12"]["printer_name"] == "Zima"
+    assert jobs_by_id["Zima-12"]["status"] == "failed"
+    assert jobs_by_id["Zima-12"]["error"] == "No pages were found."
+    assert jobs_by_id["Zima-13"]["status"] == "completed"
+    assert jobs_by_id["Zima-13"]["pages"] == 1
+
+
+def test_list_cups_jobs_keeps_500_highest_job_numbers(monkeypatch) -> None:
+    all_jobs = "\n".join(
+        f"Zima-{number} owner 1024 Mon 27 Jul 2026 17:30:00"
+        for number in range(1, 601)
+    )
+
+    def fake_run_command(arguments):
+        if "all" in arguments:
+            return CommandResult(0, all_jobs, "")
+        return CommandResult(0, all_jobs, "")
+
+    monkeypatch.setattr(cups, "run_command", fake_run_command)
+    monkeypatch.setattr(
+        cups,
+        "run_admin_helper",
+        lambda action, *_args: "{}" if action == "job-pages" else "[]",
+    )
+
+    recent = list_cups_jobs(500)
+
+    assert len(recent) == 500
+    assert recent[0]["cups_job_id"] == "Zima-600"
+    assert recent[-1]["cups_job_id"] == "Zima-101"
+    assert "Zima-100" not in {job["cups_job_id"] for job in recent}
 
 
 def test_attach_native_origins_replaces_unknown_with_client_ip(monkeypatch) -> None:

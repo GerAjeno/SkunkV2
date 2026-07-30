@@ -7,9 +7,56 @@ def _history_database(monkeypatch, tmp_path):
     path = tmp_path / "jobs.db"
     database.init_database(path)
     monkeypatch.setattr(jobs, "connect", lambda: database.connect(path))
+    monkeypatch.setattr(jobs, "transaction", lambda: database.transaction(path))
     monkeypatch.setattr(jobs, "sync_cups_history", lambda: None)
     monkeypatch.setattr(jobs, "cleanup_history", lambda: None)
     return path
+
+
+def test_recover_interrupted_jobs_marks_only_processing_as_failed(
+    monkeypatch, tmp_path
+) -> None:
+    path = _history_database(monkeypatch, tmp_path)
+    with database.connect(path) as db:
+        for job_id, status in (("interrupted", "processing"), ("waiting", "queued")):
+            db.execute(
+                """
+                INSERT INTO jobs (
+                    id, printer_name, original_name, content_type, source_path,
+                    fit_mode, orientation, copies, status, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    job_id,
+                    "Gabriela",
+                    f"{job_id}.pdf",
+                    "application/pdf",
+                    str(tmp_path / f"{job_id}.pdf"),
+                    "contain",
+                    "auto",
+                    1,
+                    status,
+                    "2026-07-30T12:00:00+00:00",
+                ),
+            )
+        db.commit()
+
+    recovered = jobs.recover_interrupted_jobs()
+
+    assert [job["id"] for job in recovered] == ["interrupted"]
+    with database.connect(path) as db:
+        interrupted = dict(
+            db.execute("SELECT * FROM jobs WHERE id = 'interrupted'").fetchone()
+        )
+        waiting = dict(
+            db.execute("SELECT * FROM jobs WHERE id = 'waiting'").fetchone()
+        )
+    assert interrupted["status"] == "failed"
+    assert "interrumpido por el reinicio" in interrupted["error"]
+    assert "evitar etiquetas duplicadas" in interrupted["error"]
+    assert interrupted["finished_at"]
+    assert waiting["status"] == "queued"
+    assert waiting["error"] is None
 
 
 def test_list_all_jobs_merges_native_jobs_and_updates_web_result(

@@ -13,6 +13,7 @@ from .jobs import (
     claim_next_job,
     cleanup_history,
     finish_job,
+    recover_interrupted_jobs,
     remove_job_files,
     sync_cups_history,
 )
@@ -74,11 +75,30 @@ def process_job(job: dict) -> None:
         remove_job_files(job)
 
 
+def recover_jobs_after_restart() -> int:
+    recovered = recover_interrupted_jobs()
+    for job in recovered:
+        try:
+            remove_job_files(job)
+        except OSError:
+            log.exception(
+                "No se pudieron limpiar los archivos del trabajo interrumpido %s",
+                job["id"],
+            )
+    if recovered:
+        log.warning(
+            "%s trabajo(s) interrumpido(s) fueron marcados como fallidos",
+            len(recovered),
+        )
+    return len(recovered)
+
+
 def main() -> None:
     settings.prepare_directories()
     init_database()
     signal.signal(signal.SIGTERM, stop_worker)
     signal.signal(signal.SIGINT, stop_worker)
+    recover_jobs_after_restart()
     log.info("Worker iniciado")
     next_history_sync = 0.0
     next_cleanup = 0.0

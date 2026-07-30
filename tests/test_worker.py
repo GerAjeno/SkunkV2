@@ -54,3 +54,21 @@ def test_process_job_submits_each_copy_explicitly(monkeypatch) -> None:
             ],
         }
     ]
+
+
+def test_worker_cleans_recovered_jobs_before_claiming_new_ones(monkeypatch) -> None:
+    recovered = [
+        {"id": "job-interrupted", "source_path": "/tmp/interrupted.pdf"},
+    ]
+    removed: list[str] = []
+    monkeypatch.setattr(worker, "recover_interrupted_jobs", lambda: recovered)
+    monkeypatch.setattr(
+        worker,
+        "remove_job_files",
+        lambda job: removed.append(job["id"]),
+    )
+
+    count = worker.recover_jobs_after_restart()
+
+    assert count == 1
+    assert removed == ["job-interrupted"]
