@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+import hashlib
 import json
 import os
 import re
@@ -447,6 +448,66 @@ def list_cups_jobs(limit: int = 100) -> list[dict]:
     jobs = jobs[:requested_limit]
     _attach_native_pages(jobs)
     _attach_native_origins(jobs)
+    jobs.extend(_native_rejected_jobs())
+    jobs.sort(
+        key=lambda job: (
+            datetime.fromisoformat(str(job.get("created_at", ""))).timestamp()
+            if job.get("created_at")
+            else 0.0
+        ),
+        reverse=True,
+    )
+    return jobs[:requested_limit]
+
+
+def _native_rejected_jobs() -> list[dict]:
+    """Represent IPP requests rejected before CUPS assigned a job number."""
+    try:
+        response = run_admin_helper("job-failures")
+        events = json.loads(response)
+    except (CupsError, json.JSONDecodeError):
+        return []
+    if not isinstance(events, list):
+        return []
+
+    jobs: list[dict] = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        printer_name = str(event.get("printer_name") or "").strip()
+        client_ip = str(event.get("client_ip") or "").strip()
+        created_at = str(event.get("created_at") or "").strip()
+        result = str(event.get("result") or "client-error-bad-request").strip()
+        try:
+            transferred = int(event.get("bytes", 0))
+            datetime.fromisoformat(created_at)
+        except (TypeError, ValueError):
+            continue
+        if not printer_name or not client_ip:
+            continue
+        fingerprint = hashlib.sha256(
+            f"{printer_name}\0{client_ip}\0{created_at}\0{result}".encode()
+        ).hexdigest()[:20]
+        if result == "client-error-bad-request" and transferred < 2048:
+            error = (
+                "CUPS rechazó una solicitud IPP incompleta antes de recibir el "
+                "documento. Cancela el trabajo bloqueado en el teléfono y vuelve "
+                "a enviarlo desde un archivo guardado localmente."
+            )
+        else:
+            error = f"CUPS rechazó el trabajo nativo: {result}"
+        jobs.append(
+            {
+                "cups_job_id": f"IPP-rejected-{fingerprint}",
+                "printer_name": printer_name,
+                "source_device": f"IP {client_ip}",
+                "original_name": "Trabajo nativo rechazado",
+                "created_at": created_at,
+                "pages": 0,
+                "status": "failed",
+                "error": error,
+            }
+        )
     return jobs
 
 
@@ -585,6 +646,23 @@ def diagnose_printer(printer_name: str) -> str:
             f"Hay {len(pending_jobs)} trabajo(s) pendiente(s) en la cola"
         )
 
+    recent_rejections = [
+        job
+        for job in _native_rejected_jobs()
+        if job["printer_name"] == printer.name
+        and (
+            datetime.now(UTC)
+            - datetime.fromisoformat(job["created_at"]).astimezone(UTC)
+        ).total_seconds()
+        <= 30 * 60
+    ]
+    if recent_rejections:
+        latest = recent_rejections[0]
+        problems.append(
+            f"CUPS rechazó {len(recent_rejections)} trabajo(s) nativo(s) en los "
+            f"últimos 30 minutos desde {latest['source_device']}: {latest['error']}"
+        )
+
     if printer.dpi != 203:
         problems.append(f"Resolución configurada incorrectamente: {printer.dpi} DPI")
     else:
@@ -682,6 +760,7 @@ def run_admin_helper(action: str, *arguments: str) -> str:
     allowed_actions = {
         "devices",
         "job-origins",
+        "job-failures",
         "job-pages",
         "add",
         "repair",

@@ -1,6 +1,6 @@
 from skunk_pc import admin
 from skunk_pc.cups import CommandResult
-from skunk_pc.admin import _native_job_origins
+from skunk_pc.admin import _native_job_failures, _native_job_origins
 
 
 def test_add_response_includes_selected_media_type(monkeypatch) -> None:
@@ -113,6 +113,25 @@ def test_native_job_origins_extracts_ip_printer_and_time(tmp_path) -> None:
             "printer_name": "Zima",
             "client_ip": "10.1.0.225",
             "created_at": "2026-07-27T18:00:04+00:00",
+        }
+    ]
+
+
+def test_native_job_failures_extracts_rejected_request(tmp_path) -> None:
+    access_log = tmp_path / "access_log"
+    access_log.write_text(
+        '192.168.1.199 - - [30/Jul/2026:18:40:09 -0400] '
+        '"POST /printers/Estacion-1 HTTP/1.1" 200 527 '
+        "Print-Job client-error-bad-request\n"
+    )
+
+    assert _native_job_failures(access_log) == [
+        {
+            "printer_name": "Estacion-1",
+            "client_ip": "192.168.1.199",
+            "created_at": "2026-07-30T18:40:09-04:00",
+            "bytes": 527,
+            "result": "client-error-bad-request",
         }
     ]
 

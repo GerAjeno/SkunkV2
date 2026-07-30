@@ -314,6 +314,38 @@ def test_job_pages_is_an_allowed_admin_action() -> None:
         cups.run_admin_helper("job-pages")
 
 
+def test_job_failures_is_an_allowed_admin_action() -> None:
+    with pytest.raises(cups.CupsError, match="servicio administrativo"):
+        cups.run_admin_helper("job-failures")
+
+
+def test_native_rejection_is_reported_as_failed_job(monkeypatch) -> None:
+    monkeypatch.setattr(
+        cups,
+        "run_admin_helper",
+        lambda action, *_args: (
+            '[{"printer_name":"Estacion-1","client_ip":"192.168.1.199",'
+            '"created_at":"2026-07-30T18:40:09-04:00","bytes":527,'
+            '"result":"client-error-bad-request"}]'
+            if action == "job-failures"
+            else "{}" if action == "job-pages" else "[]"
+        ),
+    )
+    monkeypatch.setattr(
+        cups,
+        "run_command",
+        lambda _arguments: CommandResult(0, "", ""),
+    )
+
+    jobs = list_cups_jobs()
+
+    assert jobs[0]["printer_name"] == "Estacion-1"
+    assert jobs[0]["source_device"] == "IP 192.168.1.199"
+    assert jobs[0]["status"] == "failed"
+    assert jobs[0]["pages"] == 0
+    assert "solicitud IPP incompleta" in jobs[0]["error"]
+
+
 def test_diagnose_ignores_failed_job_left_in_not_completed(monkeypatch) -> None:
     printer = Printer(
         name="Planchetta",

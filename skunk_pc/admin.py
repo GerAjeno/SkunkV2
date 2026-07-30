@@ -26,8 +26,8 @@ SPOOL_DIR = Path("/var/spool/cups")
 _PAGE_CACHE: dict[str, tuple[int, int, int]] = {}
 PRINT_JOB_RE = re.compile(
     r'^(?P<host>\S+)\s+.*?\[(?P<time>[^\]]+)\]\s+'
-    r'"POST\s+/printers/(?P<printer>[^?\s]+).*?"\s+\d+\s+\d+\s+'
-    r'Print-Job\s+'
+    r'"POST\s+/printers/(?P<printer>[^?\s]+).*?"\s+\d+\s+'
+    r'(?P<bytes>\d+)\s+Print-Job\s+(?P<result>\S+)'
 )
 
 
@@ -55,8 +55,8 @@ def _validate_uri(uri: str) -> str:
     return uri
 
 
-def _native_job_origins(path: Path = ACCESS_LOG) -> list[dict[str, str]]:
-    """Read recent native Print-Job clients without exposing the full log."""
+def _native_print_events(path: Path = ACCESS_LOG) -> list[dict[str, str | int]]:
+    """Read recent native Print-Job results without exposing the full log."""
     try:
         with path.open("rb") as handle:
             handle.seek(0, os.SEEK_END)
@@ -68,7 +68,7 @@ def _native_job_origins(path: Path = ACCESS_LOG) -> list[dict[str, str]]:
     except OSError:
         return []
 
-    events: list[dict[str, str]] = []
+    events: list[dict[str, str | int]] = []
     for line in lines:
         match = PRINT_JOB_RE.match(line)
         if not match:
@@ -85,9 +85,33 @@ def _native_job_origins(path: Path = ACCESS_LOG) -> list[dict[str, str]]:
                 "printer_name": unquote(match.group("printer")),
                 "client_ip": match.group("host"),
                 "created_at": created_at,
+                "bytes": int(match.group("bytes")),
+                "result": match.group("result"),
             }
         )
     return events[-300:]
+
+
+def _native_job_origins(path: Path = ACCESS_LOG) -> list[dict[str, str]]:
+    """Return accepted native jobs for origin attribution."""
+    return [
+        {
+            "printer_name": str(event["printer_name"]),
+            "client_ip": str(event["client_ip"]),
+            "created_at": str(event["created_at"]),
+        }
+        for event in _native_print_events(path)
+        if event["result"] == "successful-ok"
+    ]
+
+
+def _native_job_failures(path: Path = ACCESS_LOG) -> list[dict[str, str | int]]:
+    """Return native jobs rejected before CUPS could create a queue entry."""
+    return [
+        event
+        for event in _native_print_events(path)
+        if event["result"] != "successful-ok"
+    ][-100:]
 
 
 def _native_job_pages(path: Path = SPOOL_DIR) -> dict[str, int]:
@@ -192,6 +216,10 @@ def dispatch(action: str, arguments: list[str]) -> str:
         if arguments:
             raise CupsError("La consulta de orígenes no acepta parámetros")
         return json.dumps(_native_job_origins())
+    if action == "job-failures":
+        if arguments:
+            raise CupsError("La consulta de rechazos no acepta parámetros")
+        return json.dumps(_native_job_failures())
     if action == "job-pages":
         if arguments:
             raise CupsError("La consulta de páginas no acepta parámetros")
