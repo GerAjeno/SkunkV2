@@ -50,6 +50,7 @@ from .cups import (
     list_printers,
     run_admin_helper,
     send_test,
+    validate_generic_network_uri,
     validate_network_uri,
     validate_printer_name,
 )
@@ -93,7 +94,8 @@ app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static
 class AddPrinterRequest(BaseModel):
     name: str = Field(min_length=1, max_length=63)
     uri: str = Field(min_length=8, max_length=500)
-    language: str = Field(pattern="^(epl2|zpl)$")
+    kind: str = Field(default="zebra", pattern="^(zebra|generic)$")
+    language: str = Field(default="", pattern="^(epl2|zpl|)$")
     media_type: str = Field(default="direct", pattern="^(thermal|direct)$")
 
 
@@ -238,21 +240,19 @@ async def api_status(request: Request):
 @app.get("/api/printers")
 async def api_printers(request: Request):
     require_authenticated(request)
-    printers = await asyncio.to_thread(list_printers)
+    printers = await asyncio.to_thread(list_printers, include_non_zebra=True)
     return {"ok": True, "printers": [printer.as_dict() for printer in printers]}
 
 
 def _device_snapshot() -> list[dict]:
     configured_uris: dict[str, str] = {}
-    for printer in list_printers():
+    for printer in list_printers(include_non_zebra=True):
         configured_uris[printer.uri] = printer.name
         if printer.physical_uri:
             configured_uris[printer.physical_uri] = printer.name
 
     devices = []
     for device in discover_usb_printers():
-        if not device.is_zebra:
-            continue
         item = device.as_dict()
         item["serial_available"] = device.serial.strip().lower() not in {
             "",
@@ -461,7 +461,8 @@ async def api_repair_printer(printer_name: str, request: Request):
     require_csrf(request)
     printer = await asyncio.to_thread(get_printer, printer_name)
     devices = await asyncio.to_thread(discover_usb_printers)
-    devices = [device for device in devices if device.is_zebra]
+    if printer.is_zebra:
+        devices = [device for device in devices if device.is_zebra]
     if printer.physical_uri:
         uri = printer.physical_uri
     elif len(devices) == 1:
@@ -471,15 +472,17 @@ async def api_repair_printer(printer_name: str, request: Request):
             status_code=409,
             detail="No se pudo determinar automáticamente el dispositivo físico",
         )
+    kind = "zebra" if printer.is_zebra else "generic"
     output = await asyncio.to_thread(
         run_admin_helper,
         "repair",
         printer.name,
         uri,
+        kind,
         printer.language,
         printer.media_type,
     )
-    return {"ok": True, "message": output or "URI reparada y cola configurada en 4x6"}
+    return {"ok": True, "message": output or "URI reparada y cola reconfigurada"}
 
 
 @app.post("/api/printers/{printer_name}/diagnose")
@@ -501,20 +504,34 @@ async def api_purge_printer(printer_name: str, request: Request):
 async def api_add_printer(payload: AddPrinterRequest, request: Request):
     require_csrf(request)
     validate_printer_name(payload.name)
-    if payload.uri.startswith("usb://"):
-        devices = await asyncio.to_thread(discover_usb_printers)
-        available = {device.uri for device in devices if device.is_zebra}
-        if payload.uri not in available:
-            raise HTTPException(status_code=409, detail="El dispositivo USB no está conectado")
+    if payload.kind == "zebra":
+        if payload.language not in {"epl2", "zpl"}:
+            raise HTTPException(status_code=400, detail="Selecciona el lenguaje de la Zebra")
+        if payload.uri.startswith("usb://"):
+            devices = await asyncio.to_thread(discover_usb_printers)
+            available = {device.uri for device in devices if device.is_zebra}
+            if payload.uri not in available:
+                raise HTTPException(status_code=409, detail="El dispositivo USB no está conectado")
+        else:
+            validate_network_uri(payload.uri)
+        language, media_type = payload.language, payload.media_type
     else:
-        validate_network_uri(payload.uri)
+        if payload.uri.startswith("usb://"):
+            devices = await asyncio.to_thread(discover_usb_printers)
+            available = {device.uri for device in devices}
+            if payload.uri not in available:
+                raise HTTPException(status_code=409, detail="El dispositivo USB no está conectado")
+        else:
+            validate_generic_network_uri(payload.uri)
+        language, media_type = "", ""
     output = await asyncio.to_thread(
         run_admin_helper,
         "add",
         payload.name,
         payload.uri,
-        payload.language,
-        payload.media_type,
+        payload.kind,
+        language,
+        media_type,
     )
     return {"ok": True, "message": output or "Impresora agregada"}
 
@@ -530,12 +547,14 @@ async def api_rename_printer(
     new_name = validate_printer_name(payload.name)
     printer = await asyncio.to_thread(get_printer, old_name)
     uri = printer.physical_uri or printer.uri
+    kind = "zebra" if printer.is_zebra else "generic"
     output = await asyncio.to_thread(
         run_admin_helper,
         "rename",
         old_name,
         new_name,
         uri,
+        kind,
         printer.language,
         printer.media_type,
     )

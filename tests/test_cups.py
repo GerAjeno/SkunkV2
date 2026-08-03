@@ -10,11 +10,13 @@ from skunk_pc.cups import (
     _ppd_identity,
     list_cups_jobs,
     _selected_ppd_choice,
+    calibrate,
     diagnose_printer,
     discover_usb_printers,
     parse_device_uri,
     parse_lpinfo_devices,
     send_test,
+    validate_generic_network_uri,
     validate_printer_name,
 )
 from skunk_pc.schemas import Printer
@@ -152,6 +154,114 @@ def test_web_test_label_contains_origin_and_zpl_printer_name(monkeypatch) -> Non
 
     assert "ORIGEN: PAGINA WEB" in payloads[0]
     assert "IMPRESORA: Zebra_02" in payloads[0]
+
+
+def test_send_test_prints_plain_page_for_generic_printer(monkeypatch) -> None:
+    printer = Printer(
+        name="Oficina_1",
+        uri="ipp://192.168.1.50/ipp/print",
+        description="Oficina_1",
+        make_model="HP LaserJet",
+        state="idle",
+        state_message="idle",
+        connected=True,
+        is_zebra=False,
+        language="",
+        dpi=600,
+        page_size="Letter",
+        media_type="",
+    )
+    calls = []
+    monkeypatch.setattr(cups, "get_printer", lambda _name: printer)
+
+    def fake_run_command(arguments, **kwargs):
+        calls.append((arguments, kwargs))
+        return CommandResult(0, "", "")
+
+    monkeypatch.setattr(cups, "run_command", fake_run_command)
+
+    send_test("Oficina_1")
+
+    arguments, kwargs = calls[0]
+    assert arguments == ["lp", "-d", "Oficina_1"]
+    assert "Oficina_1" in kwargs["input_text"]
+    assert "-o" not in arguments
+
+
+def test_calibrate_rejects_generic_printer(monkeypatch) -> None:
+    printer = Printer(
+        name="Oficina_1",
+        uri="ipp://192.168.1.50/ipp/print",
+        description="Oficina_1",
+        make_model="HP LaserJet",
+        state="idle",
+        state_message="idle",
+        connected=True,
+        is_zebra=False,
+        language="",
+        dpi=600,
+        page_size="Letter",
+        media_type="",
+    )
+    monkeypatch.setattr(cups, "get_printer", lambda _name: printer)
+
+    with pytest.raises(cups.CupsError, match="solo está disponible para impresoras Zebra"):
+        calibrate("Oficina_1")
+
+
+def test_diagnose_reports_generic_printer_specs_without_4x6_checks(monkeypatch) -> None:
+    printer = Printer(
+        name="Oficina_1",
+        uri="ipp://192.168.1.50/ipp/print",
+        description="Oficina_1",
+        make_model="HP LaserJet",
+        state="idle",
+        state_message="idle",
+        connected=True,
+        is_zebra=False,
+        language="",
+        dpi=600,
+        page_size="Letter",
+        media_type="",
+    )
+    monkeypatch.setattr(cups, "get_printer", lambda _name: printer)
+    monkeypatch.setattr(cups, "run_command", lambda *_args, **_kwargs: CommandResult(0, "", ""))
+
+    message = diagnose_printer("Oficina_1")
+
+    assert "Resolución: 600 DPI" in message
+    assert "Formato de página: Letter" in message
+    assert "Resolución configurada incorrectamente" not in message
+    assert "Tamaño configurado incorrectamente" not in message
+    assert "No se detectaron problemas" in message
+
+
+@pytest.mark.parametrize(
+    "uri",
+    [
+        "ipp://192.168.1.50/ipp/print",
+        "ipps://impresora.local:443/ipp/print",
+        "socket://192.168.1.60:9101",
+        "lpd://192.168.1.70/cola",
+    ],
+)
+def test_validate_generic_network_uri_accepts_supported_schemes(uri: str) -> None:
+    validate_generic_network_uri(uri)
+
+
+@pytest.mark.parametrize(
+    "uri",
+    [
+        "http://192.168.1.50/print",
+        "ipp:///ipp/print",
+        "socket://192.168.1.60:70000",
+        "socket://192.168.1.60:0",
+        "ipp://192.168.1.50:99999/print",
+    ],
+)
+def test_validate_generic_network_uri_rejects_invalid_uris(uri: str) -> None:
+    with pytest.raises(cups.CupsError):
+        validate_generic_network_uri(uri)
 
 
 def test_ppd_identifies_broken_zebra_queue(tmp_path: Path) -> None:
@@ -353,7 +463,7 @@ def test_native_rejection_is_reported_as_failed_job(monkeypatch) -> None:
     assert jobs[0]["source_device"] == "IP 192.168.1.199"
     assert jobs[0]["status"] == "failed"
     assert jobs[0]["pages"] == 0
-    assert "solicitud IPP incompleta" in jobs[0]["error"]
+    assert "atributos o datos no válidos" in jobs[0]["error"]
 
 
 def test_diagnose_ignores_failed_job_left_in_not_completed(monkeypatch) -> None:

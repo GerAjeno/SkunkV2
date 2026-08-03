@@ -273,7 +273,16 @@ def list_printers(*, include_non_zebra: bool = False) -> list[Printer]:
             message = "La URI configurada no corresponde a un dispositivo USB conectado"
 
         identity = f"{make_model} {ppd_identity} {uri}".lower()
-        language = "epl2" if "epl" in identity else "zpl"
+        language = ("epl2" if "epl" in identity else "zpl") if is_zebra else ""
+        media_type = (
+            (
+                "thermal"
+                if _selected_ppd_choice(choices, "MediaType").lower() == "thermal"
+                else "direct"
+            )
+            if is_zebra
+            else ""
+        )
         printers.append(
             Printer(
                 name=name,
@@ -293,11 +302,7 @@ def list_printers(*, include_non_zebra: bool = False) -> list[Printer]:
                         _selected_ppd_choice(choices, "PageSize") or "desconocido",
                     ),
                 ),
-                media_type=(
-                    "thermal"
-                    if _selected_ppd_choice(choices, "MediaType").lower() == "thermal"
-                    else "direct"
-                ),
+                media_type=media_type,
                 physical_uri=physical_uri,
             )
         )
@@ -494,7 +499,9 @@ def _native_rejected_jobs() -> list[dict]:
         created_at = str(event.get("created_at") or "").strip()
         result = str(event.get("result") or "client-error-bad-request").strip()
         try:
-            transferred = int(event.get("bytes", 0))
+            # CUPS access_log records the IPP response size here, not the
+            # number of document bytes uploaded by the client.
+            int(event.get("bytes", 0))
             datetime.fromisoformat(created_at)
         except (TypeError, ValueError):
             continue
@@ -503,11 +510,11 @@ def _native_rejected_jobs() -> list[dict]:
         fingerprint = hashlib.sha256(
             f"{printer_name}\0{client_ip}\0{created_at}\0{result}".encode()
         ).hexdigest()[:20]
-        if result == "client-error-bad-request" and transferred < 2048:
+        if result == "client-error-bad-request":
             error = (
-                "CUPS rechazó una solicitud IPP incompleta antes de recibir el "
-                "documento. Cancela el trabajo bloqueado en el teléfono y vuelve "
-                "a enviarlo desde un archivo guardado localmente."
+                "CUPS rechazó la solicitud IPP del dispositivo por contener "
+                "atributos o datos no válidos. Cancela el trabajo bloqueado en "
+                "el teléfono antes de crear uno nuevo."
             )
         else:
             error = f"CUPS rechazó el trabajo nativo: {result}"
@@ -678,15 +685,19 @@ def diagnose_printer(printer_name: str) -> str:
             f"últimos 30 minutos desde {latest['source_device']}: {latest['error']}"
         )
 
-    if printer.dpi != 203:
+    if not printer.is_zebra:
+        details.append(f"Resolución: {printer.dpi} DPI")
+        details.append(f"Formato de página: {printer.page_size or 'automático'}")
+    elif printer.dpi != 203:
         problems.append(f"Resolución configurada incorrectamente: {printer.dpi} DPI")
     else:
         details.append("Resolución: 203 DPI")
 
-    if printer.page_size != "w288h432":
-        problems.append(f"Tamaño configurado incorrectamente: {printer.page_size}")
-    else:
-        details.append("Formato: 4×6")
+    if printer.is_zebra:
+        if printer.page_size != "w288h432":
+            problems.append(f"Tamaño configurado incorrectamente: {printer.page_size}")
+        else:
+            details.append("Formato: 4×6")
 
     heading = (
         f"Se detectaron {len(problems)} problema(s) en {printer.name}:"
@@ -744,6 +755,16 @@ def send_raw(printer_name: str, payload: str) -> None:
 
 def send_test(printer_name: str) -> None:
     printer = get_printer(printer_name)
+    if not printer.is_zebra:
+        payload = (
+            "SKUNK PC - PAGINA DE PRUEBA\n\n"
+            f"Impresora: {printer.name}\n"
+            f"Modelo: {printer.make_model}\n"
+            f"Hora: {datetime.now(UTC).isoformat(timespec='seconds')}\n"
+        )
+        result = run_command(["lp", "-d", printer_name], timeout=20, input_text=payload)
+        require_success(result, "No se pudo enviar la prueba de impresión")
+        return
     if printer.language == "epl2":
         thermal_mode = "O\n" if printer.media_type == "thermal" else "OD\n"
         payload = (
@@ -768,6 +789,8 @@ def send_test(printer_name: str) -> None:
 
 def calibrate(printer_name: str) -> None:
     printer = get_printer(printer_name)
+    if not printer.is_zebra:
+        raise CupsError("La calibración solo está disponible para impresoras Zebra")
     send_raw(printer_name, "\njc\n" if printer.language == "epl2" else "~JC\n^XA^JUS^XZ")
 
 
@@ -822,3 +845,29 @@ def validate_network_uri(uri: str) -> None:
     ipaddress.ip_address(parsed.hostname)
     if parsed.port not in (None, 9100):
         raise CupsError("El puerto de una Zebra de red debe ser 9100")
+
+
+HOSTNAME_RE = re.compile(
+    r"^[A-Za-z0-9]([A-Za-z0-9-]{0,62})?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,62})?)*$"
+)
+GENERIC_NETWORK_SCHEMES = {"ipp", "ipps", "socket", "lpd"}
+
+
+def validate_generic_network_uri(uri: str) -> None:
+    parsed = urlparse(uri)
+    if parsed.scheme not in GENERIC_NETWORK_SCHEMES or not parsed.hostname:
+        raise CupsError(
+            "Solo se aceptan impresoras de red ipp://, ipps://, socket:// o lpd://"
+        )
+    hostname = parsed.hostname
+    try:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        if len(hostname) > 253 or not HOSTNAME_RE.fullmatch(hostname):
+            raise CupsError("El host de la impresora de red no es válido") from None
+    try:
+        port = parsed.port
+    except ValueError:
+        raise CupsError("El puerto de la impresora de red no es válido") from None
+    if port is not None and not 1 <= port <= 65535:
+        raise CupsError("El puerto de la impresora de red no es válido")

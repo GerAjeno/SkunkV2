@@ -1,6 +1,7 @@
 from skunk_pc import admin
 from skunk_pc.cups import CommandResult
 from skunk_pc.admin import _native_job_failures, _native_job_origins
+from skunk_pc.schemas import UsbPrinter
 
 
 def test_add_response_includes_selected_media_type(monkeypatch) -> None:
@@ -8,13 +9,96 @@ def test_add_response_includes_selected_media_type(monkeypatch) -> None:
 
     message = admin.dispatch(
         "add",
-        ["Gabriela", "usb://Zebra/TLP2844", "epl2", "thermal"],
+        ["Gabriela", "usb://Zebra/TLP2844", "zebra", "epl2", "thermal"],
     )
 
     assert message == (
         "Impresora Gabriela configurada en 4×6, 203 DPI, "
         "EPL2, Thermal y URI estable"
     )
+
+
+def test_add_response_for_generic_printer_uses_driverless_message(monkeypatch) -> None:
+    monkeypatch.setattr(admin, "_configure", lambda *args: None)
+
+    message = admin.dispatch(
+        "add",
+        ["Oficina_1", "ipp://192.168.1.50/ipp/print", "generic", "", ""],
+    )
+
+    assert message == (
+        "Impresora Oficina_1 configurada con controlador automático "
+        "(IPP Everywhere) y URI estable"
+    )
+
+
+def test_configure_zebra_printer_forces_label_settings(monkeypatch) -> None:
+    commands: list[list[str]] = []
+
+    def fake_run_command(arguments, **_kwargs):
+        commands.append(arguments)
+        return CommandResult(0, "", "")
+
+    monkeypatch.setattr(admin, "run_command", fake_run_command)
+    monkeypatch.setattr(
+        admin,
+        "discover_usb_printers",
+        lambda **_kwargs: [
+            UsbPrinter(
+                uri="usb://Zebra/TLP2844",
+                manufacturer="Zebra",
+                model="TLP2844",
+                serial="123",
+                is_zebra=True,
+            )
+        ],
+    )
+
+    admin._configure("Gabriela", "usb://Zebra/TLP2844", "zebra", "epl2", "thermal")
+
+    assert commands[0] == [
+        "lpadmin", "-p", "Gabriela", "-v", "usb://Zebra/TLP2844",
+        "-E", "-m", "drv:///sample.drv/zebraep2.ppd", "-D", "Gabriela",
+        "-L", "Skunk PC",
+        "-o", "printer-is-shared=true",
+        "-o", "printer-error-policy=retry-job",
+        "-o", "PageSize=w288h432",
+        "-o", "media=w288h432",
+        "-o", "Resolution=203dpi",
+        "-o", "MediaType=Thermal",
+        "-o", "usb-unidirectional-default=true",
+    ]
+
+
+def test_configure_generic_printer_uses_driverless_driver(monkeypatch) -> None:
+    commands: list[list[str]] = []
+
+    def fake_run_command(arguments, **_kwargs):
+        commands.append(arguments)
+        return CommandResult(0, "", "")
+
+    monkeypatch.setattr(admin, "run_command", fake_run_command)
+
+    admin._configure("Oficina_1", "ipp://192.168.1.50/ipp/print", "generic", "", "")
+
+    assert commands[0] == [
+        "lpadmin", "-p", "Oficina_1", "-v", "ipp://192.168.1.50/ipp/print",
+        "-E", "-m", "everywhere", "-D", "Oficina_1", "-L", "Skunk PC",
+        "-o", "printer-is-shared=true",
+    ]
+    assert commands[1] == ["cupsaccept", "Oficina_1"]
+    assert commands[2] == ["cupsenable", "Oficina_1"]
+
+
+def test_configure_generic_usb_rejects_device_not_detected(monkeypatch) -> None:
+    monkeypatch.setattr(admin, "discover_usb_printers", lambda **_kwargs: [])
+
+    try:
+        admin._configure("Oficina_1", "usb://Canon/MX490", "generic", "", "")
+    except Exception as exc:
+        assert "no corresponde a un dispositivo USB conectado" in str(exc)
+    else:
+        raise AssertionError("Debía rechazar un USB no detectado")
 
 
 def test_reboot_is_scheduled_without_accepting_arguments(monkeypatch) -> None:
@@ -157,10 +241,10 @@ def test_rename_creates_new_queue_then_removes_old(monkeypatch) -> None:
 
     message = admin.dispatch(
         "rename",
-        ["Gabriela", "Zima", "usb://Zebra/TLP2844", "epl2", "thermal"],
+        ["Gabriela", "Zima", "usb://Zebra/TLP2844", "zebra", "epl2", "thermal"],
     )
 
-    assert configured == [("Zima", "usb://Zebra/TLP2844", "epl2", "thermal")]
+    assert configured == [("Zima", "usb://Zebra/TLP2844", "zebra", "epl2", "thermal")]
     assert ["cancel", "-a", "-x", "Gabriela"] in commands
     assert ["lpadmin", "-x", "Gabriela"] in commands
     assert message == "Impresora Gabriela renombrada como Zima"

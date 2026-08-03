@@ -204,13 +204,23 @@ Como ejemplo de organización, las colas pueden llamarse
 `Etiquetadora_Recepcion` y `Etiquetadora_Despacho`. Los nombres visibles son
 libres y no deben depender del modelo, puerto USB o dirección del servidor.
 
-Desde **Añadir Zebra**, selecciona el dispositivo USB disponible, el lenguaje
-compatible y el método de impresión correspondiente. El dispositivo debe
-mostrar su número de serie cuando el firmware lo proporciona. Si indica
-**S/N no informado**, identifica físicamente la impresora antes de crear la
-cola.
+Desde **Añadir impresora**, elige primero el **tipo** (Zebra o Genérica) y la
+**conexión** (USB o red). Para una Zebra por USB, selecciona el dispositivo
+disponible, el lenguaje compatible y el método de impresión correspondiente;
+el dispositivo debe mostrar su número de serie cuando el firmware lo
+proporciona, y si indica **S/N no informado**, identifica físicamente la
+impresora antes de crear la cola. Para una Zebra de red usa
+`socket://IP:9100`.
 
-En cada tarjeta de impresora están disponibles:
+También puede agregarse cualquier **impresora genérica**, por USB o por red
+(`ipp://`, `ipps://`, `socket://host:puerto` o `lpd://host/cola`), usando el
+controlador automático de CUPS (IPP Everywhere). Las impresoras genéricas
+son solo administrables desde el panel — se pueden probar, diagnosticar,
+vaciar su cola, renombrar y eliminar, pero el formulario de impresión web
+(subir PDF/imagen) sigue exclusivo para Zebra, porque está construido para
+etiquetas 4×6 a 203 DPI.
+
+En cada tarjeta de impresora Zebra están disponibles:
 
 - **Prueba**: imprime una etiqueta de validación.
 - **Calibrar**: ejecuta la calibración del medio.
@@ -219,6 +229,10 @@ En cada tarjeta de impresora están disponibles:
 - **Vaciar cola**: cancela los trabajos pendientes de esa impresora.
 - **Diagnóstico**: revisa conexión, estado CUPS, cola, resolución y formato.
 - **Eliminar**: elimina la cola y su configuración del sistema.
+
+Las impresoras genéricas ofrecen las mismas acciones salvo **Calibrar** (no
+aplica), y su botón de reparación se llama **Reparar conexión**: solo
+recupera la URI física, sin forzar tamaño de etiqueta ni resolución.
 
 Antes de reparar una cola con trabajos antiguos, revísalos:
 
@@ -298,7 +312,8 @@ Esta versión no:
 - Descomprime respaldos sobre `/`.
 - Ejecuta comandos Git desde un watchdog.
 - Cancela automáticamente trabajos atascados.
-- Publica impresoras descubiertas que no sean Zebra en su panel.
+- Permite imprimir desde el formulario web hacia impresoras que no sean
+  Zebra, aunque estén agregadas y administrables desde el panel.
 
 La versión de prueba usa HTTP dentro de la LAN. Antes de exponer el panel fuera
 de la red local debe añadirse HTTPS mediante un proxy confiable.
@@ -449,9 +464,9 @@ así, valida cada una desde el panel:
 5. Envía una etiqueta mediante impresión nativa desde un teléfono.
 6. Confirma formato 4×6, orientación, calidad, copias e historial.
 
-Si se conectan impresoras nuevas, créalas exclusivamente desde **Añadir Zebra**
-en el panel. No reutilices una cola de otra impresora solamente porque ambas
-compartan modelo.
+Si se conectan impresoras nuevas, créalas exclusivamente desde **Añadir
+impresora** en el panel. No reutilices una cola de otra impresora solamente
+porque ambas compartan modelo.
 
 ### 7. Verificación final
 

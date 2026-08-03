@@ -14,6 +14,7 @@ from .cups import (
     discover_usb_printers,
     require_success,
     run_command,
+    validate_generic_network_uri,
     validate_network_uri,
     validate_printer_name,
 )
@@ -36,7 +37,7 @@ def _stop(_signum: int, _frame: object) -> None:
     running = False
 
 
-def _validate_uri(uri: str) -> str:
+def _validate_uri(uri: str, kind: str) -> str:
     if len(uri) > 500:
         raise CupsError("URI demasiado larga")
     if uri.startswith("usb://"):
@@ -46,12 +47,19 @@ def _validate_uri(uri: str) -> str:
                 allow_admin_helper=False,
                 refresh=True,
             )
-            if device.is_zebra
+            if kind != "zebra" or device.is_zebra
         }
         if uri not in available:
-            raise CupsError("La URI no corresponde a una Zebra USB conectada")
+            raise CupsError(
+                "La URI no corresponde a una Zebra USB conectada"
+                if kind == "zebra"
+                else "La URI no corresponde a un dispositivo USB conectado"
+            )
         return uri
-    validate_network_uri(uri)
+    if kind == "zebra":
+        validate_network_uri(uri)
+    else:
+        validate_generic_network_uri(uri)
     return uri
 
 
@@ -147,47 +155,69 @@ def _native_job_pages(path: Path = SPOOL_DIR) -> dict[str, int]:
     return pages
 
 
-def _configure(name: str, uri: str, language: str, media_type: str) -> None:
+def _configure(
+    name: str, uri: str, kind: str, language: str, media_type: str
+) -> None:
     validate_printer_name(name)
-    _validate_uri(uri)
-    if language not in {"epl2", "zpl"}:
-        raise CupsError("Lenguaje de impresora inválido")
-    if media_type not in {"thermal", "direct"}:
-        raise CupsError("Método térmico inválido")
-    cups_media_type = "Thermal" if media_type == "thermal" else "Direct"
-    driver = (
-        "drv:///sample.drv/zebraep2.ppd"
-        if language == "epl2"
-        else "drv:///sample.drv/zebra.ppd"
-    )
-    arguments = [
-        "lpadmin",
-        "-p",
-        name,
-        "-v",
-        uri,
-        "-E",
-        "-m",
-        driver,
-        "-D",
-        name,
-        "-L",
-        "Skunk PC",
-        "-o",
-        "printer-is-shared=true",
-        "-o",
-        "printer-error-policy=retry-job",
-        "-o",
-        "PageSize=w288h432",
-        "-o",
-        "media=w288h432",
-        "-o",
-        "Resolution=203dpi",
-        "-o",
-        f"MediaType={cups_media_type}",
-    ]
-    if uri.startswith("usb://"):
-        arguments += ["-o", "usb-unidirectional-default=true"]
+    if kind not in {"zebra", "generic"}:
+        raise CupsError("Tipo de impresora inválido")
+    _validate_uri(uri, kind)
+    if kind == "zebra":
+        if language not in {"epl2", "zpl"}:
+            raise CupsError("Lenguaje de impresora inválido")
+        if media_type not in {"thermal", "direct"}:
+            raise CupsError("Método térmico inválido")
+        cups_media_type = "Thermal" if media_type == "thermal" else "Direct"
+        driver = (
+            "drv:///sample.drv/zebraep2.ppd"
+            if language == "epl2"
+            else "drv:///sample.drv/zebra.ppd"
+        )
+        arguments = [
+            "lpadmin",
+            "-p",
+            name,
+            "-v",
+            uri,
+            "-E",
+            "-m",
+            driver,
+            "-D",
+            name,
+            "-L",
+            "Skunk PC",
+            "-o",
+            "printer-is-shared=true",
+            "-o",
+            "printer-error-policy=retry-job",
+            "-o",
+            "PageSize=w288h432",
+            "-o",
+            "media=w288h432",
+            "-o",
+            "Resolution=203dpi",
+            "-o",
+            f"MediaType={cups_media_type}",
+        ]
+        if uri.startswith("usb://"):
+            arguments += ["-o", "usb-unidirectional-default=true"]
+    else:
+        arguments = [
+            "lpadmin",
+            "-p",
+            name,
+            "-v",
+            uri,
+            "-E",
+            "-m",
+            "everywhere",
+            "-D",
+            name,
+            "-L",
+            "Skunk PC",
+            "-o",
+            "printer-is-shared=true",
+        ]
     require_success(run_command(arguments, timeout=40), "CUPS no pudo configurar la cola")
     require_success(run_command(["cupsaccept", name]), "CUPS no acepta trabajos")
     require_success(run_command(["cupsenable", name]), "CUPS no pudo habilitar la cola")
@@ -230,10 +260,15 @@ def dispatch(action: str, arguments: list[str]) -> str:
         devices = discover_usb_printers(allow_admin_helper=False)
         return json.dumps([device.as_dict() for device in devices])
     if action in {"add", "repair"}:
-        if len(arguments) != 4:
+        if len(arguments) != 5:
             raise CupsError("Parámetros administrativos incompletos")
-        name, uri, language, media_type = arguments
-        _configure(name, uri, language, media_type)
+        name, uri, kind, language, media_type = arguments
+        _configure(name, uri, kind, language, media_type)
+        if kind == "generic":
+            return (
+                f"Impresora {name} configurada con controlador automático "
+                "(IPP Everywhere) y URI estable"
+            )
         cups_media_type = "Thermal" if media_type == "thermal" else "Direct"
         return (
             f"Impresora {name} configurada en 4×6, 203 DPI, "
@@ -255,9 +290,9 @@ def dispatch(action: str, arguments: list[str]) -> str:
             raise CupsError("CUPS mantuvo la cola después de solicitar su eliminación")
         return f"Impresora {name} y su configuración fueron eliminadas"
     if action == "rename":
-        if len(arguments) != 5:
+        if len(arguments) != 6:
             raise CupsError("Parámetros administrativos incompletos")
-        old_name, new_name, uri, language, media_type = arguments
+        old_name, new_name, uri, kind, language, media_type = arguments
         old_name = validate_printer_name(old_name)
         new_name = validate_printer_name(new_name)
         if old_name == new_name:
@@ -266,7 +301,7 @@ def dispatch(action: str, arguments: list[str]) -> str:
         if run_command(["lpstat", "-p", new_name]).returncode == 0:
             raise CupsError("Ya existe una impresora con ese nombre")
 
-        _configure(new_name, uri, language, media_type)
+        _configure(new_name, uri, kind, language, media_type)
         try:
             run_command(["cancel", "-a", "-x", old_name])
             require_success(

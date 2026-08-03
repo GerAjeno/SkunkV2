@@ -86,7 +86,7 @@ function renderPrinters(printers) {
     historySelect.innerHTML = '<option value="">Todas</option>';
   }
   if (!printers.length) {
-    grid.innerHTML = '<div class="empty-card">No hay impresoras Zebra configuradas.</div>';
+    grid.innerHTML = '<div class="empty-card">No hay impresoras configuradas.</div>';
     return;
   }
   grid.innerHTML = printers.map((printer) => `
@@ -100,36 +100,43 @@ function renderPrinters(printers) {
       </div>
       <div class="printer-uri">${escapeHtml(printer.uri)}</div>
       <div class="printer-specs">
+        ${printer.is_zebra ? `
         <span>${escapeHtml(printer.language.toUpperCase())}</span>
         <span>${escapeHtml(printer.dpi)} DPI</span>
         <span>${escapeHtml(printer.page_size)}</span>
         <span>${printer.media_type === "thermal" ? "CON RIBBON" : "TÉRMICA DIRECTA"}</span>
+        ` : `
+        <span>GENÉRICA</span>
+        <span>${escapeHtml(printer.page_size || "Formato automático")}</span>
+        `}
       </div>
       <div class="printer-actions">
         <button class="btn btn-secondary" data-action="rename" data-printer="${escapeHtml(printer.name)}">Cambiar nombre</button>
         <button class="btn btn-secondary" data-action="test" data-printer="${escapeHtml(printer.name)}">Prueba</button>
-        <button class="btn btn-quiet" data-action="calibrate" data-printer="${escapeHtml(printer.name)}">Calibrar</button>
+        ${printer.is_zebra ? `<button class="btn btn-quiet" data-action="calibrate" data-printer="${escapeHtml(printer.name)}">Calibrar</button>` : ""}
         <button class="btn btn-secondary" data-action="diagnose" data-printer="${escapeHtml(printer.name)}">Diagnosticar</button>
         <button class="btn btn-warning" data-action="purge" data-printer="${escapeHtml(printer.name)}">Vaciar trabajos</button>
-        <button class="btn btn-warning" data-action="repair" data-printer="${escapeHtml(printer.name)}">Reparar y fijar 4×6</button>
+        <button class="btn btn-warning" data-action="repair" data-printer="${escapeHtml(printer.name)}">${printer.is_zebra ? "Reparar y fijar 4×6" : "Reparar conexión"}</button>
         <button class="btn btn-danger" data-action="delete" data-printer="${escapeHtml(printer.name)}">Eliminar impresora</button>
       </div>
     </article>
   `).join("");
 
-  for (const printer of printers.filter((item) => item.connected)) {
+  for (const printer of printers.filter((item) => item.connected && item.is_zebra)) {
     const option = document.createElement("option");
     option.value = printer.name;
     option.textContent = printer.description || printer.name;
     select.append(option);
-    if (historySelect) {
+  }
+  if (historySelect) {
+    for (const printer of printers.filter((item) => item.connected)) {
       const historyOption = document.createElement("option");
       historyOption.value = printer.name;
       historyOption.textContent = printer.description || printer.name;
       historySelect.append(historyOption);
     }
+    historySelect.value = selectedHistoryPrinter;
   }
-  if (historySelect) historySelect.value = selectedHistoryPrinter;
 }
 
 let jobsPage = 1;
@@ -391,33 +398,75 @@ $("#add-printer-dialog")?.addEventListener("cancel", (event) => {
   closeAddPrinterDialog();
 });
 
+let addPrinterDevices = [];
+
+function renderDeviceOptions() {
+  const select = $("#device-select");
+  const isZebra = $("#printer-kind").value === "zebra";
+  const relevant = isZebra
+    ? addPrinterDevices.filter((device) => device.is_zebra)
+    : addPrinterDevices;
+  select.innerHTML = "";
+  for (const device of relevant) {
+    const option = document.createElement("option");
+    option.value = device.uri;
+    const serial = device.serial_available
+      ? `S/N ${device.serial}`
+      : "S/N no informado";
+    const status = device.installed_queue
+      ? `YA INSTALADA: ${device.installed_queue}`
+      : "DISPONIBLE";
+    option.textContent = `${device.model} · ${serial} · ${status}`;
+    option.disabled = Boolean(device.installed_queue);
+    select.append(option);
+  }
+  if (!relevant.length) {
+    select.innerHTML = isZebra
+      ? '<option value="">No hay Zebra USB disponible</option>'
+      : '<option value="">No hay dispositivos USB disponibles</option>';
+  }
+}
+
+function syncAddPrinterFields() {
+  const isZebra = $("#printer-kind").value === "zebra";
+  const isUsb = $("#connection-kind").value === "usb";
+
+  $("#device-select-label").hidden = !isUsb;
+  $("#device-select").disabled = !isUsb;
+  $("#device-select").required = isUsb;
+
+  $("#network-uri-label").hidden = isUsb;
+  $("#network-uri").disabled = isUsb;
+  $("#network-uri").required = !isUsb;
+  $("#network-uri-hint").textContent = isZebra
+    ? "Formato requerido: socket://IP:9100"
+    : "Formatos admitidos: ipp://host/ruta, ipps://host/ruta, socket://host:puerto, lpd://host/cola";
+
+  $("#zebra-language-label").hidden = !isZebra;
+  $("#add-language").disabled = !isZebra;
+  $("#zebra-media-label").hidden = !isZebra;
+  $("#add-media-type").disabled = !isZebra;
+}
+
+$("#printer-kind")?.addEventListener("change", () => {
+  syncAddPrinterFields();
+  renderDeviceOptions();
+});
+$("#connection-kind")?.addEventListener("change", syncAddPrinterFields);
+
 $("#add-printer-button")?.addEventListener("click", async () => {
   const dialog = $("#add-printer-dialog");
   const select = $("#device-select");
   $("#add-printer-form").reset();
   $("#add-message").textContent = "";
   $("#add-message").className = "form-message";
+  syncAddPrinterFields();
   select.innerHTML = '<option value="">Buscando dispositivos…</option>';
   dialog.showModal();
   try {
     const data = await api("/api/devices");
-    select.innerHTML = "";
-    for (const device of data.devices) {
-      const option = document.createElement("option");
-      option.value = device.uri;
-      const serial = device.serial_available
-        ? `S/N ${device.serial}`
-        : "S/N no informado";
-      const status = device.installed_queue
-        ? `YA INSTALADA: ${device.installed_queue}`
-        : "DISPONIBLE";
-      option.textContent = `${device.model} · ${serial} · ${status}`;
-      option.disabled = Boolean(device.installed_queue);
-      select.append(option);
-    }
-    if (!data.devices.length) {
-      select.innerHTML = '<option value="">No hay Zebra USB disponible</option>';
-    }
+    addPrinterDevices = data.devices;
+    renderDeviceOptions();
   } catch (error) {
     $("#add-message").textContent = error.message;
   }
