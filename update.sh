@@ -9,7 +9,7 @@ fi
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$repo_dir"
 
-expected_remote="https://github.com/GerAjeno/Skunk-PC-Next.git"
+expected_remote="https://github.com/GerAjeno/SkunkV2.git"
 actual_remote="$(git remote get-url origin 2>/dev/null || true)"
 if [[ "$actual_remote" != "$expected_remote" ]]; then
     echo "El remoto origin no corresponde a $expected_remote." >&2
