@@ -7,6 +7,11 @@ para ejecutarse en Ubuntu y ofrecer dos formas de impresión:
    controlar ajuste, orientación y copias.
 2. Impresión nativa por IPP/mDNS desde Android y iPhone.
 
+El panel también permite agregar y administrar cualquier otra impresora USB o
+de red (oficina, red compartida, etc.) además de las Zebra, para tener todo el
+parque de impresoras en un solo lugar — ver la sección **Primera validación en
+el servidor** para el flujo de alta.
+
 La web incluye un manifiesto instalable y caché únicamente para sus recursos
 estáticos. La instalación como PWA requiere HTTPS; por HTTP local funciona como
 web móvil normal. La impresión nativa por IPP no depende de la PWA.
@@ -29,6 +34,12 @@ incluidas TLP2844 y GC420t en modo EPL2, con:
 También admite modelos Zebra equivalentes, como GK888, cuando CUPS dispone de
 un controlador EPL2 o ZPL compatible. Las impresoras de red pueden agregarse
 mediante una dirección `socket` en el puerto 9100.
+
+Cualquier otra impresora USB o de red (oficina, multifunción, etc.) también
+puede agregarse como impresora **genérica**, usando el controlador automático
+de CUPS (IPP Everywhere) — ver **Primera validación en el servidor** más
+abajo. Estas impresoras son administrables desde el panel, pero el formulario
+de impresión web sigue siendo exclusivo para Zebra.
 
 ## Arquitectura
 
