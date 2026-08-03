@@ -55,7 +55,7 @@ ON print_history(created_at);
 
 
 class ClosingConnection(sqlite3.Connection):
-    """SQLite connection whose context manager also releases the file."""
+    """Conexión SQLite cuyo gestor de contexto también libera el archivo."""
 
     def __exit__(self, exc_type, exc_value, traceback) -> bool:
         try:

@@ -132,7 +132,7 @@ def list_all_jobs(
     created_after: str = "",
     created_before: str = "",
 ) -> dict:
-    """Return a filtered page combining web and persisted native jobs."""
+    """Devuelve una página filtrada combinando trabajos web y trabajos nativos persistidos."""
     page = max(page, 1)
     page_size = min(max(page_size, 1), 100)
     combined = filtered_jobs(
@@ -163,7 +163,7 @@ def filtered_jobs(
     created_after: str = "",
     created_before: str = "",
 ) -> list[dict]:
-    """Return all filtered history rows, newest first."""
+    """Devuelve todos los registros de historial filtrados, del más reciente al más antiguo."""
     sync_cups_history()
     cleanup_history()
     with connect() as db:
@@ -248,12 +248,13 @@ def _sortable_datetime(value: object) -> datetime:
 
 
 def recover_interrupted_jobs() -> list[dict]:
-    """Fail jobs owned by the previous worker process after a restart.
+    """Marca como fallidos los trabajos del proceso worker anterior tras un reinicio.
 
-    Skunk PC runs a single systemd-managed worker. Therefore, any row still
-    marked as processing before the new worker begins claiming jobs belongs to
-    the process that just stopped. Retrying it could duplicate labels if CUPS
-    accepted part of the submission before the interruption.
+    Skunk PC ejecuta un único worker administrado por systemd. Por lo tanto,
+    cualquier registro que siga marcado como "processing" antes de que el
+    worker nuevo empiece a tomar trabajos pertenece al proceso que acaba de
+    detenerse. Reintentarlo podría duplicar etiquetas si CUPS aceptó parte
+    del envío antes de la interrupción.
     """
     finished_at = utc_now()
     with transaction() as db:

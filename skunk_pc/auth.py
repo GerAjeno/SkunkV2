@@ -34,7 +34,7 @@ class _LoginAttempt:
 
 
 class LoginAttemptLimiter:
-    """Bound failed login attempts without storing credentials."""
+    """Limita los intentos fallidos de inicio de sesión sin almacenar credenciales."""
 
     def __init__(
         self,
@@ -82,7 +82,7 @@ class LoginAttemptLimiter:
             if failure_count >= self.max_failures:
                 attempt.blocked_until = current + self.block_seconds
                 return 0.0, self.block_seconds
-            # 250 ms, 500 ms, 1 s and 2 s before the hard block.
+            # 250 ms, 500 ms, 1 s y 2 s antes del bloqueo definitivo.
             return min(0.25 * (2 ** (failure_count - 1)), 2.0), 0
 
     def record_success(self, client: str) -> None:
@@ -122,7 +122,7 @@ login_attempts = LoginAttemptLimiter()
 
 
 class LoginBodyLimitMiddleware:
-    """Reject oversized login bodies before Starlette parses the form."""
+    """Rechaza solicitudes de inicio de sesión demasiado grandes antes de que Starlette procese el formulario."""
 
     def __init__(self, app: Callable, limit: int = LOGIN_BODY_LIMIT) -> None:
         self.app = app

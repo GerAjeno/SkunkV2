@@ -740,8 +740,8 @@ function showRebootOverlay(deadline) {
 }
 
 $("#reboot-button")?.addEventListener("click", async (event) => {
-  // currentTarget is cleared by the browser after the first await. Keep the
-  // button reference now so the confirmed action can continue reliably.
+  // El navegador borra currentTarget después del primer await. Se guarda la
+  // referencia del botón ahora para que la acción confirmada siga funcionando.
   const button = event.currentTarget;
   const accepted = await askConfirmation({
     title: "Reiniciar el servidor",

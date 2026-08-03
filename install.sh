@@ -28,9 +28,10 @@ apt-get install -y \
     python3 python3-venv python3-pip poppler-utils ghostscript \
     fonts-dejavu-core colord btop
 
-# A newly installed colord policy is not necessarily picked up by an already
-# running system D-Bus daemon.  Without this reload, every raster conversion
-# can wait twice for the 25-second ColorManager activation timeout.
+# Una política de colord recién instalada no es detectada necesariamente por
+# un demonio D-Bus del sistema que ya está en ejecución. Sin este reload, cada
+# conversión raster puede esperar dos veces el timeout de 25 segundos de
+# activación de ColorManager.
 systemctl reload dbus.service
 
 if ! getent group "$service_user" >/dev/null; then

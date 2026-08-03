@@ -64,7 +64,7 @@ def _validate_uri(uri: str, kind: str) -> str:
 
 
 def _native_print_events(path: Path = ACCESS_LOG) -> list[dict[str, str | int]]:
-    """Read recent native Print-Job results without exposing the full log."""
+    """Lee los resultados recientes de Print-Job nativos sin exponer el registro completo."""
     try:
         with path.open("rb") as handle:
             handle.seek(0, os.SEEK_END)
@@ -101,7 +101,7 @@ def _native_print_events(path: Path = ACCESS_LOG) -> list[dict[str, str | int]]:
 
 
 def _native_job_origins(path: Path = ACCESS_LOG) -> list[dict[str, str]]:
-    """Return accepted native jobs for origin attribution."""
+    """Devuelve los trabajos nativos aceptados para atribuir su origen."""
     return [
         {
             "printer_name": str(event["printer_name"]),
@@ -114,7 +114,7 @@ def _native_job_origins(path: Path = ACCESS_LOG) -> list[dict[str, str]]:
 
 
 def _native_job_failures(path: Path = ACCESS_LOG) -> list[dict[str, str | int]]:
-    """Return native jobs rejected before CUPS could create a queue entry."""
+    """Devuelve los trabajos nativos rechazados antes de que CUPS creara una entrada en la cola."""
     return [
         event
         for event in _native_print_events(path)
@@ -123,7 +123,7 @@ def _native_job_failures(path: Path = ACCESS_LOG) -> list[dict[str, str | int]]:
 
 
 def _native_job_pages(path: Path = SPOOL_DIR) -> dict[str, int]:
-    """Return page counts for retained native job documents."""
+    """Devuelve la cantidad de páginas de los documentos de trabajos nativos retenidos."""
     pages: dict[str, int] = {}
     try:
         documents = list(path.glob("d[0-9][0-9][0-9][0-9][0-9]-*"))
@@ -282,8 +282,8 @@ def dispatch(action: str, arguments: list[str]) -> str:
             run_command(["lpstat", "-p", name]),
             "La impresora no existe",
         )
-        # Remove pending and retained jobs before deleting the destination.
-        # `cancel` may report that there are no jobs, which is harmless here.
+        # Elimina los trabajos pendientes y retenidos antes de borrar el destino.
+        # `cancel` puede informar que no hay trabajos, lo cual es inofensivo aquí.
         run_command(["cancel", "-a", "-x", name])
         require_success(run_command(["lpadmin", "-x", name]), "No se pudo eliminar la cola")
         if run_command(["lpstat", "-p", name]).returncode == 0:

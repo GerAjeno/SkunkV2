@@ -46,9 +46,9 @@ def process_job(job: dict) -> None:
             fit_mode=job["fit_mode"],
             orientation=job["orientation"],
         )
-        # Several legacy Zebra PPDs advertise copy support but only emit one
-        # physical label. Submit each copy explicitly so all Zebra models
-        # behave consistently.
+        # Varios PPD antiguos de Zebra anuncian soporte de copias pero solo
+        # emiten una etiqueta física. Cada copia se envía explícitamente para
+        # que todos los modelos Zebra se comporten igual.
         for _copy in range(job["copies"]):
             for page in pages:
                 cups_ids.append(

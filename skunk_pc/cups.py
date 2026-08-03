@@ -198,8 +198,8 @@ def discover_network_printers(*, refresh: bool = False) -> list[NetworkPrinter]:
             ],
             timeout=NETWORK_DISCOVERY_TIMEOUT + 5,
         )
-        # ippfind exits with a non-zero status when nothing is found; that is
-        # not an error, just an empty network.
+        # ippfind termina con código distinto de cero cuando no encuentra nada;
+        # eso no es un error, solo significa que la red no tiene resultados.
         devices = parse_ippfind_output(result.stdout) if result.stdout else []
 
         _network_cache = devices
@@ -378,7 +378,7 @@ def cups_running() -> bool:
 
 
 def _active_job_lines(output: str) -> list[str]:
-    """Return job headers, excluding stale completed jobs exposed by CUPS."""
+    """Devuelve los encabezados de trabajos, excluyendo los completados obsoletos que expone CUPS."""
     jobs: list[str] = []
     current_header = ""
     current_detail: list[str] = []
@@ -409,7 +409,7 @@ def _active_job_lines(output: str) -> list[str]:
 
 
 def _system_timezone(timezone_file: Path = Path("/etc/timezone")) -> tzinfo:
-    """Return the configured system timezone, including historical DST rules."""
+    """Devuelve la zona horaria configurada del sistema, incluyendo las reglas históricas de horario de verano."""
     try:
         timezone_name = timezone_file.read_text(encoding="utf-8").strip()
         if timezone_name:
@@ -420,7 +420,7 @@ def _system_timezone(timezone_file: Path = Path("/etc/timezone")) -> tzinfo:
 
 
 def _cups_datetime(value: str, *, local_timezone: tzinfo | None = None) -> str:
-    """Convert the timezone-less local timestamp printed by lpstat to UTC."""
+    """Convierte a UTC la fecha local sin zona horaria que imprime lpstat."""
     value = value.strip()
     timezone = local_timezone or _system_timezone()
     for pattern in (
@@ -478,7 +478,7 @@ def _cups_job_sort_key(job: dict) -> tuple[int, float]:
 
 
 def list_cups_jobs(limit: int = 100) -> list[dict]:
-    """Read recent jobs accepted directly by CUPS, including native IPP."""
+    """Lee los trabajos recientes aceptados directamente por CUPS, incluyendo IPP nativo."""
     all_result = run_command(["lpstat", "-W", "all", "-l", "-o"])
     if all_result.returncode != 0:
         return []
@@ -537,7 +537,7 @@ def list_cups_jobs(limit: int = 100) -> list[dict]:
 
 
 def _native_rejected_jobs() -> list[dict]:
-    """Represent IPP requests rejected before CUPS assigned a job number."""
+    """Representa las solicitudes IPP rechazadas antes de que CUPS asignara un número de trabajo."""
     try:
         response = run_admin_helper("job-failures")
         events = json.loads(response)
@@ -555,8 +555,8 @@ def _native_rejected_jobs() -> list[dict]:
         created_at = str(event.get("created_at") or "").strip()
         result = str(event.get("result") or "client-error-bad-request").strip()
         try:
-            # CUPS access_log records the IPP response size here, not the
-            # number of document bytes uploaded by the client.
+            # El access_log de CUPS registra aquí el tamaño de la respuesta IPP,
+            # no la cantidad de bytes del documento subido por el cliente.
             int(event.get("bytes", 0))
             datetime.fromisoformat(created_at)
         except (TypeError, ValueError):
@@ -634,9 +634,10 @@ def _attach_native_origins(jobs: list[dict]) -> None:
         else:
             job["source_device"] = f"{owner} · IP {client_ip}"
 
-    # Localized `lpstat` dates cannot always be parsed. CUPS preserves the
-    # order of jobs and access events, so pair the remaining records by queue
-    # and chronological position instead of leaving their origin unknown.
+    # Las fechas localizadas de `lpstat` no siempre se pueden interpretar. CUPS
+    # conserva el orden de los trabajos y eventos de acceso, así que los registros
+    # restantes se emparejan por cola y posición cronológica en vez de dejar su
+    # origen sin identificar.
     for printer_name in {job["printer_name"] for job in jobs}:
         remaining_jobs = [
             job for job in jobs
@@ -677,7 +678,7 @@ def _attach_native_pages(jobs: list[dict]) -> None:
         if isinstance(pages, int) and pages > 0:
             job["pages"] = pages
         elif job["status"] != "failed":
-            # Every accepted native print job contains at least one page.
+            # Todo trabajo nativo aceptado contiene al menos una página.
             job["pages"] = 1
 
 
