@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .config import settings
-from .schemas import Printer, UsbPrinter
+from .schemas import NetworkPrinter, Printer, UsbPrinter
 
 
 PRINTER_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$")
@@ -33,6 +33,12 @@ USB_CACHE_SECONDS = 10.0
 _usb_cache_lock = threading.Lock()
 _usb_cache_expires_at = 0.0
 _usb_cache: list[UsbPrinter] = []
+
+NETWORK_CACHE_SECONDS = 20.0
+NETWORK_DISCOVERY_TIMEOUT = 4
+_network_cache_lock = threading.Lock()
+_network_cache_expires_at = 0.0
+_network_cache: list[NetworkPrinter] = []
 
 
 class CupsError(RuntimeError):
@@ -148,6 +154,56 @@ def discover_usb_printers(
 
         _usb_cache = devices
         _usb_cache_expires_at = time.monotonic() + USB_CACHE_SECONDS
+        return list(devices)
+
+
+def parse_ippfind_output(output: str) -> list[NetworkPrinter]:
+    devices: list[NetworkPrinter] = []
+    for line in output.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split("##", 2)
+        if len(parts) != 3:
+            continue
+        name, uri, model = parts
+        if not uri:
+            continue
+        devices.append(NetworkPrinter(uri=uri, name=name or uri, model=model or name or uri))
+    return devices
+
+
+def discover_network_printers(*, refresh: bool = False) -> list[NetworkPrinter]:
+    global _network_cache, _network_cache_expires_at
+
+    now = time.monotonic()
+    if not refresh and now < _network_cache_expires_at:
+        return list(_network_cache)
+
+    with _network_cache_lock:
+        now = time.monotonic()
+        if not refresh and now < _network_cache_expires_at:
+            return list(_network_cache)
+
+        result = run_command(
+            [
+                "ippfind",
+                "-T",
+                str(NETWORK_DISCOVERY_TIMEOUT),
+                "--remote",
+                "-x",
+                "/bin/echo",
+                "{service_name}##{service_uri}##{txt_ty}",
+                ";",
+            ],
+            timeout=NETWORK_DISCOVERY_TIMEOUT + 5,
+        )
+        # ippfind exits with a non-zero status when nothing is found; that is
+        # not an error, just an empty network.
+        devices = parse_ippfind_output(result.stdout) if result.stdout else []
+
+        _network_cache = devices
+        _network_cache_expires_at = time.monotonic() + NETWORK_CACHE_SECONDS
         return list(devices)
 
 

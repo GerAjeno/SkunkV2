@@ -413,6 +413,43 @@ $("#add-printer-dialog")?.addEventListener("cancel", (event) => {
 });
 
 let addPrinterDevices = [];
+let addPrinterNetworkDevices = [];
+const MANUAL_NETWORK_URI = "__manual__";
+
+function renderNetworkDeviceOptions() {
+  const select = $("#network-device-select");
+  select.innerHTML = "";
+  for (const device of addPrinterNetworkDevices) {
+    const option = document.createElement("option");
+    option.value = device.uri;
+    const status = device.installed_queue
+      ? `YA INSTALADA: ${device.installed_queue}`
+      : "DISPONIBLE";
+    option.textContent = `${device.name} · ${device.model} · ${status}`;
+    option.disabled = Boolean(device.installed_queue);
+    select.append(option);
+  }
+  const manualOption = document.createElement("option");
+  manualOption.value = MANUAL_NETWORK_URI;
+  manualOption.textContent = addPrinterNetworkDevices.length
+    ? "Otra dirección (escribir manualmente)"
+    : "No se encontraron impresoras en la red · escribir manualmente";
+  select.append(manualOption);
+  select.value = MANUAL_NETWORK_URI;
+}
+
+$("#network-device-select")?.addEventListener("change", (event) => {
+  const uri = event.target.value;
+  const field = $("#network-uri");
+  if (uri === MANUAL_NETWORK_URI) {
+    field.value = "";
+    field.readOnly = false;
+    field.focus();
+    return;
+  }
+  field.value = uri;
+  field.readOnly = true;
+});
 
 function renderDeviceOptions() {
   const select = $("#device-select");
@@ -449,6 +486,7 @@ function syncAddPrinterFields() {
   $("#device-select").disabled = !isUsb;
   $("#device-select").required = isUsb;
 
+  $("#network-device-select-label").hidden = isUsb;
   $("#network-uri-label").hidden = isUsb;
   $("#network-uri").disabled = isUsb;
   $("#network-uri").required = !isUsb;
@@ -471,16 +509,24 @@ $("#connection-kind")?.addEventListener("change", syncAddPrinterFields);
 $("#add-printer-button")?.addEventListener("click", async () => {
   const dialog = $("#add-printer-dialog");
   const select = $("#device-select");
+  const networkSelect = $("#network-device-select");
   $("#add-printer-form").reset();
   $("#add-message").textContent = "";
   $("#add-message").className = "form-message";
+  $("#network-uri").readOnly = false;
   syncAddPrinterFields();
   select.innerHTML = '<option value="">Buscando dispositivos…</option>';
+  networkSelect.innerHTML = '<option value="">Buscando en la red…</option>';
   dialog.showModal();
   try {
-    const data = await api("/api/devices");
-    addPrinterDevices = data.devices;
+    const [usbData, networkData] = await Promise.all([
+      api("/api/devices"),
+      api("/api/network-devices"),
+    ]);
+    addPrinterDevices = usbData.devices;
     renderDeviceOptions();
+    addPrinterNetworkDevices = networkData.devices;
+    renderNetworkDeviceOptions();
   } catch (error) {
     $("#add-message").textContent = error.message;
   }

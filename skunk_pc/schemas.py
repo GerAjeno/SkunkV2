@@ -33,3 +33,13 @@ class UsbPrinter:
 
     def as_dict(self) -> dict:
         return asdict(self)
+
+
+@dataclass
+class NetworkPrinter:
+    uri: str
+    name: str
+    model: str
+
+    def as_dict(self) -> dict:
+        return asdict(self)

@@ -45,6 +45,7 @@ from .cups import (
     calibrate,
     cups_running,
     diagnose_printer,
+    discover_network_printers,
     discover_usb_printers,
     get_printer,
     list_printers,
@@ -274,6 +275,26 @@ def _device_snapshot() -> list[dict]:
 async def api_devices(request: Request):
     require_authenticated(request)
     devices = await asyncio.to_thread(_device_snapshot)
+    return {"ok": True, "devices": devices}
+
+
+def _network_device_snapshot() -> list[dict]:
+    configured_uris = {
+        printer.uri: printer.name
+        for printer in list_printers(include_non_zebra=True)
+    }
+    devices = []
+    for device in discover_network_printers():
+        item = device.as_dict()
+        item["installed_queue"] = configured_uris.get(device.uri)
+        devices.append(item)
+    return devices
+
+
+@app.get("/api/network-devices")
+async def api_network_devices(request: Request):
+    require_authenticated(request)
+    devices = await asyncio.to_thread(_network_device_snapshot)
     return {"ok": True, "devices": devices}
 
 

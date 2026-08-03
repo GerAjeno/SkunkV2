@@ -12,8 +12,10 @@ from skunk_pc.cups import (
     _selected_ppd_choice,
     calibrate,
     diagnose_printer,
+    discover_network_printers,
     discover_usb_printers,
     parse_device_uri,
+    parse_ippfind_output,
     parse_lpinfo_devices,
     send_test,
     set_darkness,
@@ -352,6 +354,41 @@ def test_validate_generic_network_uri_accepts_supported_schemes(uri: str) -> Non
 def test_validate_generic_network_uri_rejects_invalid_uris(uri: str) -> None:
     with pytest.raises(cups.CupsError):
         validate_generic_network_uri(uri)
+
+
+def test_parse_ippfind_output_extracts_name_uri_and_model() -> None:
+    output = (
+        "Brother HL-1210W series##ipp://BRN44F79F95ACC6.local:631/ipp/print"
+        "##Brother HL-1210W series\n"
+        "\n"
+        "malformed line without separators\n"
+    )
+    devices = parse_ippfind_output(output)
+
+    assert len(devices) == 1
+    assert devices[0].name == "Brother HL-1210W series"
+    assert devices[0].uri == "ipp://BRN44F79F95ACC6.local:631/ipp/print"
+    assert devices[0].model == "Brother HL-1210W series"
+
+
+def test_discover_network_printers_uses_ippfind_remote_flag(monkeypatch) -> None:
+    calls = []
+
+    def fake_run_command(arguments, **kwargs):
+        calls.append(arguments)
+        return CommandResult(
+            0,
+            "Brother HL-1210W series##ipp://BRN44F79F95ACC6.local:631/ipp/print##Brother HL-1210W series",
+            "",
+        )
+
+    monkeypatch.setattr(cups, "run_command", fake_run_command)
+
+    devices = discover_network_printers(refresh=True)
+
+    assert devices[0].uri == "ipp://BRN44F79F95ACC6.local:631/ipp/print"
+    assert calls[0][0] == "ippfind"
+    assert "--remote" in calls[0]
 
 
 def test_ppd_identifies_broken_zebra_queue(tmp_path: Path) -> None:

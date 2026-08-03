@@ -220,6 +220,20 @@ vaciar su cola, renombrar y eliminar, pero el formulario de impresión web
 (subir PDF/imagen) sigue exclusivo para Zebra, porque está construido para
 etiquetas 4×6 a 203 DPI.
 
+Al elegir conexión **Red**, el panel busca automáticamente impresoras
+anunciadas en la red local (mDNS/Bonjour) durante unos segundos y las
+muestra en una lista para elegir, sin necesidad de conocer su IP. Si una
+impresora no aparece (por ejemplo, algunos modelos Brother de gama baja que
+no anuncian su servicio, o que están en otra subred), puede escribirse su
+dirección manualmente con la opción **Otra dirección**.
+
+Algunas impresoras de red muy básicas (impresoras "GDI"/host-based, como
+ciertos modelos Brother HL-1xxx) no implementan un lenguaje de impresión
+real y no funcionan correctamente con el controlador automático IPP
+Everywhere, incluso si CUPS logra agregarlas. Antes de depender de una de
+estas impresoras, imprime una prueba y confirma que el resultado es
+legible.
+
 En cada tarjeta de impresora Zebra están disponibles:
 
 - **Prueba**: imprime una etiqueta de validación.
