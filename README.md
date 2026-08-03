@@ -321,10 +321,10 @@ de 24 horas. Si CUPS informa un fallo, el historial conserva el mensaje de
 error. Los registros históricos completados no deben confundirse con trabajos
 pendientes en la cola.
 
-Al terminar el arranque, `skunk-console.service` abre `btop` automáticamente en
-la consola física `tty1`. Se ejecuta como el usuario restringido `skunkpc`, no
-como root. Al salir de `btop` con `q`, la consola muestra el inicio de sesión
-normal de `tty1`.
+Al terminar el arranque, `skunk-console.service` abre `cmatrix` automáticamente
+en la consola física `tty1`. Se ejecuta como el usuario restringido `skunkpc`,
+no como root. Al salir de `cmatrix` con `q`, la consola muestra el inicio de
+sesión normal de `tty1`.
 
 El acceso al panel limita cada IP a cinco contraseñas incorrectas dentro de diez
 minutos. El quinto fallo bloquea nuevos intentos durante quince minutos y queda
@@ -379,8 +379,8 @@ clon.
 
 ### 1. Primer arranque y detección de interfaces
 
-Inicia el equipo de producción y sal de `btop` con `q` si necesitas acceder al
-inicio de sesión. Comprueba los nombres reales de sus interfaces:
+Inicia el equipo de producción y sal de `cmatrix` con `q` si necesitas acceder
+al inicio de sesión. Comprueba los nombres reales de sus interfaces:
 
 ```bash
 ip -brief link

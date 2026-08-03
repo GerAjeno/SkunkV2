@@ -122,9 +122,9 @@ staging_dir=""
 swapped=1
 
 sudo systemctl daemon-reload
-if ! command -v btop >/dev/null 2>&1; then
+if ! command -v cmatrix >/dev/null 2>&1; then
     sudo apt-get update
-    sudo apt-get install -y btop
+    sudo apt-get install -y cmatrix
 fi
 sudo systemctl enable getty@tty1.service
 sudo systemctl enable skunk-console.service

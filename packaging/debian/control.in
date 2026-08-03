@@ -4,7 +4,7 @@ Section: admin
 Priority: optional
 Architecture: amd64
 Maintainer: Skunk PC <noreply@example.invalid>
-Depends: adduser, avahi-daemon, avahi-utils, btop, colord, cups, cups-client, cups-filters, curl, dbus, fonts-dejavu-core, ghostscript, poppler-utils, python3 (>= 3.14), python3 (<< 3.15), python3-venv, systemd
+Depends: adduser, avahi-daemon, avahi-utils, cmatrix, colord, cups, cups-client, cups-filters, curl, dbus, fonts-dejavu-core, ghostscript, poppler-utils, python3 (>= 3.14), python3 (<< 3.15), python3-venv, systemd
 Installed-Size: @INSTALLED_SIZE@
 Description: Servidor local de impresion 4x6 para Zebra
  Skunk PC recibe PDF, imagenes y texto desde su panel web y mediante

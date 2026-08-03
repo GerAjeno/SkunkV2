@@ -26,7 +26,7 @@ apt-get update
 apt-get install -y \
     cups cups-client cups-filters avahi-daemon avahi-utils \
     python3 python3-venv python3-pip poppler-utils ghostscript \
-    fonts-dejavu-core colord btop
+    fonts-dejavu-core colord cmatrix
 
 # Una política de colord recién instalada no es detectada necesariamente por
 # un demonio D-Bus del sistema que ya está en ejecución. Sin este reload, cada

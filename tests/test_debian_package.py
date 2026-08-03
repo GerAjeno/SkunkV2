@@ -17,7 +17,7 @@ def test_debian_control_declares_runtime_dependencies() -> None:
         "poppler-utils",
         "python3-venv",
         "colord",
-        "btop",
+        "cmatrix",
     ):
         assert dependency in control
 
