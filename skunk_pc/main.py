@@ -50,6 +50,7 @@ from .cups import (
     list_printers,
     run_admin_helper,
     send_test,
+    set_darkness,
     validate_generic_network_uri,
     validate_network_uri,
     validate_printer_name,
@@ -101,6 +102,10 @@ class AddPrinterRequest(BaseModel):
 
 class RenamePrinterRequest(BaseModel):
     name: str = Field(min_length=1, max_length=63)
+
+
+class DarknessRequest(BaseModel):
+    level: int = Field(ge=0, le=30)
 
 
 def _server_ip() -> str:
@@ -454,6 +459,15 @@ async def api_calibrate_printer(printer_name: str, request: Request):
     require_csrf(request)
     await asyncio.to_thread(calibrate, printer_name)
     return {"ok": True, "message": "Calibración enviada"}
+
+
+@app.post("/api/printers/{printer_name}/darkness")
+async def api_set_printer_darkness(
+    printer_name: str, payload: DarknessRequest, request: Request
+):
+    require_csrf(request)
+    await asyncio.to_thread(set_darkness, printer_name, payload.level)
+    return {"ok": True, "message": f"Densidad ajustada a {payload.level}"}
 
 
 @app.post("/api/printers/{printer_name}/repair")

@@ -114,6 +114,7 @@ function renderPrinters(printers) {
         <button class="btn btn-secondary" data-action="rename" data-printer="${escapeHtml(printer.name)}">Cambiar nombre</button>
         <button class="btn btn-secondary" data-action="test" data-printer="${escapeHtml(printer.name)}">Prueba</button>
         ${printer.is_zebra ? `<button class="btn btn-quiet" data-action="calibrate" data-printer="${escapeHtml(printer.name)}">Calibrar</button>` : ""}
+        ${printer.is_zebra ? `<button class="btn btn-quiet" data-action="darkness" data-printer="${escapeHtml(printer.name)}" data-language="${escapeHtml(printer.language)}">Densidad</button>` : ""}
         <button class="btn btn-secondary" data-action="diagnose" data-printer="${escapeHtml(printer.name)}">Diagnosticar</button>
         <button class="btn btn-warning" data-action="purge" data-printer="${escapeHtml(printer.name)}">Vaciar trabajos</button>
         <button class="btn btn-warning" data-action="repair" data-printer="${escapeHtml(printer.name)}">${printer.is_zebra ? "Reparar y fijar 4×6" : "Reparar conexión"}</button>
@@ -339,6 +340,19 @@ $("#printer-grid")?.addEventListener("click", async (event) => {
     $("#rename-new-name").select();
     return;
   }
+  if (action === "darkness") {
+    const isEpl2 = button.dataset.language === "epl2";
+    const range = isEpl2 ? { min: 0, max: 15, def: 8 } : { min: 0, max: 30, def: 15 };
+    $("#darkness-printer").value = printer;
+    $("#darkness-level").min = String(range.min);
+    $("#darkness-level").max = String(range.max);
+    $("#darkness-level").value = String(range.def);
+    $("#darkness-range-hint").textContent = `(${range.min}-${range.max})`;
+    $("#darkness-message").textContent = "";
+    $("#darkness-message").className = "form-message";
+    $("#darkness-dialog").showModal();
+    return;
+  }
   button.disabled = true;
   if (confirmations[action]) {
     button.textContent = "Esperando confirmación…";
@@ -540,6 +554,47 @@ $("#rename-printer-form")?.addEventListener("submit", async (event) => {
   } finally {
     submit.disabled = false;
     submit.textContent = "Guardar nombre";
+  }
+});
+
+function closeDarknessDialog() {
+  const dialog = $("#darkness-dialog");
+  if (dialog?.open) dialog.close();
+}
+
+document.querySelectorAll("[data-close-darkness]").forEach((button) => {
+  button.addEventListener("click", closeDarknessDialog);
+});
+
+$("#darkness-dialog")?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeDarknessDialog();
+});
+
+$("#darkness-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const printer = $("#darkness-printer").value;
+  const level = Number($("#darkness-level").value);
+  const submit = $("#darkness-submit");
+  const message = $("#darkness-message");
+  submit.disabled = true;
+  submit.textContent = "Aplicando…";
+  message.textContent = "";
+  message.className = "form-message";
+  try {
+    const data = await api(`/api/printers/${encodeURIComponent(printer)}/darkness`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ level }),
+    });
+    closeDarknessDialog();
+    toast(data.message || "Densidad ajustada");
+  } catch (error) {
+    message.textContent = error.message;
+    message.className = "form-message error";
+  } finally {
+    submit.disabled = false;
+    submit.textContent = "Aplicar";
   }
 });
 

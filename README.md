@@ -224,6 +224,9 @@ En cada tarjeta de impresora Zebra están disponibles:
 
 - **Prueba**: imprime una etiqueta de validación.
 - **Calibrar**: ejecuta la calibración del medio.
+- **Densidad**: ajusta el nivel de oscuridad de impresión (0-15 en EPL2, 0-30
+  en ZPL) para etiquetas que salen muy claras u oscuras. El valor queda guardado
+  en la memoria de la impresora, igual que desde su panel físico.
 - **Reparar y fijar 4×6**: recupera la conexión y normaliza tamaño, resolución
   y método térmico.
 - **Vaciar cola**: cancela los trabajos pendientes de esa impresora.

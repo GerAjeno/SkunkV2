@@ -794,6 +794,23 @@ def calibrate(printer_name: str) -> None:
     send_raw(printer_name, "\njc\n" if printer.language == "epl2" else "~JC\n^XA^JUS^XZ")
 
 
+DARKNESS_RANGES = {"epl2": (0, 15), "zpl": (0, 30)}
+
+
+def set_darkness(printer_name: str, level: int) -> None:
+    printer = get_printer(printer_name)
+    if not printer.is_zebra:
+        raise CupsError("La densidad de impresión solo está disponible para impresoras Zebra")
+    minimum, maximum = DARKNESS_RANGES[printer.language]
+    if not minimum <= level <= maximum:
+        raise CupsError(f"La densidad debe estar entre {minimum} y {maximum}")
+    if printer.language == "epl2":
+        payload = f"\nD{level}\n"
+    else:
+        payload = f"~SD{level:02d}\n"
+    send_raw(printer_name, payload)
+
+
 def run_admin_helper(action: str, *arguments: str) -> str:
     allowed_actions = {
         "devices",

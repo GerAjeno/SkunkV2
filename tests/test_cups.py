@@ -16,6 +16,7 @@ from skunk_pc.cups import (
     parse_device_uri,
     parse_lpinfo_devices,
     send_test,
+    set_darkness,
     validate_generic_network_uri,
     validate_printer_name,
 )
@@ -186,6 +187,95 @@ def test_send_test_prints_plain_page_for_generic_printer(monkeypatch) -> None:
     assert arguments == ["lp", "-d", "Oficina_1"]
     assert "Oficina_1" in kwargs["input_text"]
     assert "-o" not in arguments
+
+
+def test_set_darkness_sends_epl2_density_command(monkeypatch) -> None:
+    printer = Printer(
+        name="Zebra_01",
+        uri="usb://Zebra/TLP2844?serial=ABC",
+        description="Zebra_01",
+        make_model="Zebra EPL2",
+        state="idle",
+        state_message="idle",
+        connected=True,
+        is_zebra=True,
+        language="epl2",
+        dpi=203,
+        page_size="w288h432",
+        media_type="thermal",
+    )
+    payloads = []
+    monkeypatch.setattr(cups, "get_printer", lambda _name: printer)
+    monkeypatch.setattr(cups, "send_raw", lambda _name, payload: payloads.append(payload))
+
+    set_darkness("Zebra_01", 12)
+
+    assert payloads[0] == "\nD12\n"
+
+
+def test_set_darkness_sends_zpl_darkness_command(monkeypatch) -> None:
+    printer = Printer(
+        name="Zebra_02",
+        uri="socket://10.1.0.90:9100",
+        description="Zebra_02",
+        make_model="Zebra ZPL",
+        state="idle",
+        state_message="idle",
+        connected=True,
+        is_zebra=True,
+        language="zpl",
+        dpi=203,
+        page_size="w288h432",
+    )
+    payloads = []
+    monkeypatch.setattr(cups, "get_printer", lambda _name: printer)
+    monkeypatch.setattr(cups, "send_raw", lambda _name, payload: payloads.append(payload))
+
+    set_darkness("Zebra_02", 5)
+
+    assert payloads[0] == "~SD05\n"
+
+
+def test_set_darkness_rejects_out_of_range_level(monkeypatch) -> None:
+    printer = Printer(
+        name="Zebra_01",
+        uri="usb://Zebra/TLP2844?serial=ABC",
+        description="Zebra_01",
+        make_model="Zebra EPL2",
+        state="idle",
+        state_message="idle",
+        connected=True,
+        is_zebra=True,
+        language="epl2",
+        dpi=203,
+        page_size="w288h432",
+        media_type="thermal",
+    )
+    monkeypatch.setattr(cups, "get_printer", lambda _name: printer)
+
+    with pytest.raises(cups.CupsError, match="entre 0 y 15"):
+        set_darkness("Zebra_01", 20)
+
+
+def test_set_darkness_rejects_generic_printer(monkeypatch) -> None:
+    printer = Printer(
+        name="Oficina_1",
+        uri="ipp://192.168.1.50/ipp/print",
+        description="Oficina_1",
+        make_model="HP LaserJet",
+        state="idle",
+        state_message="idle",
+        connected=True,
+        is_zebra=False,
+        language="",
+        dpi=600,
+        page_size="Letter",
+        media_type="",
+    )
+    monkeypatch.setattr(cups, "get_printer", lambda _name: printer)
+
+    with pytest.raises(cups.CupsError, match="solo está disponible para impresoras Zebra"):
+        set_darkness("Oficina_1", 10)
 
 
 def test_calibrate_rejects_generic_printer(monkeypatch) -> None:

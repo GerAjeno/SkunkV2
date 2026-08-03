@@ -283,6 +283,32 @@
     </form>
   </dialog>
 
+  <dialog id="darkness-dialog">
+    <form id="darkness-form" method="dialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">CALIDAD DE IMPRESIÓN</p>
+          <h2>Densidad de impresión</h2>
+        </div>
+        <button class="icon-button" type="button" data-close-darkness aria-label="Cerrar">×</button>
+      </div>
+      <input id="darkness-printer" type="hidden">
+      <label>
+        Nivel <span id="darkness-range-hint"></span>
+        <input id="darkness-level" name="level" type="number" min="0" max="30" required>
+      </label>
+      <p class="muted">
+        Sube el valor si las etiquetas salen muy claras y bájalo si el ribbon se
+        desgasta o el texto se ve corrido.
+      </p>
+      <p id="darkness-message" class="form-message"></p>
+      <div class="dialog-actions">
+        <button class="btn btn-quiet" type="button" data-close-darkness>Cancelar</button>
+        <button id="darkness-submit" class="btn btn-primary" type="submit">Aplicar</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="diagnostic-dialog">
     <div class="diagnostic-dialog-content">
       <div class="dialog-heading">
