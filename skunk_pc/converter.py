@@ -41,25 +41,49 @@ def _rotation_for_fit(image: Image.Image, orientation: str) -> int:
     return 90 if rotated_scale > normal_scale * 1.08 else 0
 
 
+def trim_to_content(image: Image.Image, *, threshold: int = 245, padding: int = 12) -> Image.Image:
+    """Recorta los márgenes casi blancos, dejando solo el área con contenido real.
+
+    Sirve para etiquetas incrustadas en una hoja más grande (por ejemplo, guías
+    de despacho que ubican la etiqueta 4x6 en una esquina de una hoja A4). Si
+    no se detecta un margen recortable, devuelve la imagen sin cambios.
+    """
+    grayscale = image.convert("L")
+    mask = grayscale.point(lambda p: 255 if p <= threshold else 0)
+    bbox = mask.getbbox()
+    if bbox is None:
+        return image
+    left, top, right, bottom = bbox
+    left = max(0, left - padding)
+    top = max(0, top - padding)
+    right = min(image.width, right + padding)
+    bottom = min(image.height, bottom + padding)
+    if (right - left) >= image.width * 0.98 and (bottom - top) >= image.height * 0.98:
+        return image
+    return image.crop((left, top, right, bottom))
+
+
 def normalize_image(
     image: Image.Image,
     *,
     fit_mode: str,
     orientation: str,
 ) -> Image.Image:
-    if fit_mode not in {"contain", "cover"}:
+    if fit_mode not in {"contain", "cover", "trim"}:
         raise ConversionError("Modo de ajuste inválido")
     if orientation not in {"auto", "portrait", "landscape"}:
         raise ConversionError("Orientación inválida")
 
     working = image.convert("RGB")
+    if fit_mode == "trim":
+        working = trim_to_content(working)
     if _rotation_for_fit(working, orientation):
         working = working.rotate(90, expand=True)
 
-    if fit_mode == "contain":
-        scale = min(LABEL_WIDTH / working.width, LABEL_HEIGHT / working.height)
-    else:
+    if fit_mode == "cover":
         scale = max(LABEL_WIDTH / working.width, LABEL_HEIGHT / working.height)
+    else:
+        scale = min(LABEL_WIDTH / working.width, LABEL_HEIGHT / working.height)
 
     resized = working.resize(
         (
@@ -114,32 +138,29 @@ def _render_text(path: Path) -> Image.Image:
     return canvas
 
 
-def _render_pdf(path: Path, work_dir: Path) -> list[Path]:
+def _render_pdf(path: Path, work_dir: Path, *, page: int | None = None) -> list[Path]:
     if path.read_bytes()[:5] != b"%PDF-":
         raise ConversionError("El archivo no contiene un PDF válido")
     if not shutil.which("pdftoppm"):
         raise ConversionError("pdftoppm no está instalado")
 
     prefix = work_dir / "pdf-page"
+    args = ["pdftoppm", "-png", "-r", str(LABEL_DPI)]
+    if page is not None:
+        args += ["-f", str(page), "-l", str(page)]
+    args += [str(path), str(prefix)]
     result = subprocess.run(
-        [
-            "pdftoppm",
-            "-png",
-            "-r",
-            str(LABEL_DPI),
-            str(path),
-            str(prefix),
-        ],
+        args,
         capture_output=True,
         text=True,
         timeout=120,
         check=False,
     )
-    if result.returncode != 0:
-        raise ConversionError(result.stderr.strip() or "No fue posible renderizar el PDF")
     pages = sorted(work_dir.glob("pdf-page-*.png"))
-    if not pages:
-        raise ConversionError("El PDF no contiene páginas imprimibles")
+    if result.returncode != 0 or not pages:
+        if page is not None:
+            raise ConversionError(f"El PDF no tiene una página {page}")
+        raise ConversionError(result.stderr.strip() or "No fue posible renderizar el PDF")
     if len(pages) > 50:
         raise ConversionError("El PDF excede el máximo de 50 páginas")
     return pages
@@ -151,12 +172,15 @@ def convert_document(
     *,
     fit_mode: str = "contain",
     orientation: str = "auto",
+    page: int | None = None,
 ) -> list[Path]:
     suffix = source.suffix.lower()
     if suffix not in SUPPORTED_SUFFIXES:
         raise ConversionError(
             "Formato no compatible. Usa PDF, PNG, JPEG, WebP, BMP, TIFF, TXT o CSV"
         )
+    if page is not None and page < 1:
+        raise ConversionError("El número de página debe ser 1 o mayor")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     rendered: list[Image.Image] = []
@@ -164,7 +188,7 @@ def convert_document(
 
     try:
         if suffix == ".pdf":
-            temporary_pages = _render_pdf(source, output_dir)
+            temporary_pages = _render_pdf(source, output_dir, page=page)
             for page in temporary_pages:
                 with Image.open(page) as image:
                     rendered.append(image.copy())

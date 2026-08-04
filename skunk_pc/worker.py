@@ -45,6 +45,7 @@ def process_job(job: dict) -> None:
             output_dir,
             fit_mode=job["fit_mode"],
             orientation=job["orientation"],
+            page=job["source_page"],
         )
         # Varios PPD antiguos de Zebra anuncian soporte de copias pero solo
         # emiten una etiqueta física. Cada copia se envía explícitamente para

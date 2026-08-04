@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     original_name TEXT NOT NULL,
     content_type TEXT NOT NULL,
     source_path TEXT NOT NULL,
-    fit_mode TEXT NOT NULL CHECK (fit_mode IN ('contain', 'cover')),
+    fit_mode TEXT NOT NULL CHECK (fit_mode IN ('contain', 'cover', 'trim')),
     orientation TEXT NOT NULL CHECK (orientation IN ('auto', 'portrait', 'landscape')),
     copies INTEGER NOT NULL CHECK (copies BETWEEN 1 AND 20),
     status TEXT NOT NULL CHECK (
@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     pages INTEGER NOT NULL DEFAULT 0,
     cups_job_ids TEXT NOT NULL DEFAULT '',
     source_device TEXT NOT NULL DEFAULT 'Página web',
+    source_page INTEGER,
     error TEXT,
     created_at TEXT NOT NULL,
     started_at TEXT,
@@ -76,6 +77,61 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     return db
 
 
+def _jobs_needs_fit_mode_rebuild(db: sqlite3.Connection) -> bool:
+    row = db.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='jobs'"
+    ).fetchone()
+    return row is not None and "'trim'" not in row["sql"]
+
+
+def _rebuild_jobs_table_for_trim_fit_mode(db: sqlite3.Connection) -> None:
+    # SQLite no permite modificar una restricción CHECK con ALTER TABLE, así
+    # que la tabla se reconstruye con el esquema nuevo y se copian los datos.
+    db.executescript(
+        """
+        ALTER TABLE jobs RENAME TO jobs_old;
+
+        CREATE TABLE jobs (
+            id TEXT PRIMARY KEY,
+            printer_name TEXT NOT NULL,
+            original_name TEXT NOT NULL,
+            content_type TEXT NOT NULL,
+            source_path TEXT NOT NULL,
+            fit_mode TEXT NOT NULL CHECK (fit_mode IN ('contain', 'cover', 'trim')),
+            orientation TEXT NOT NULL CHECK (orientation IN ('auto', 'portrait', 'landscape')),
+            copies INTEGER NOT NULL CHECK (copies BETWEEN 1 AND 20),
+            status TEXT NOT NULL CHECK (
+                status IN ('queued', 'processing', 'submitted', 'completed', 'failed', 'cancelled')
+            ),
+            pages INTEGER NOT NULL DEFAULT 0,
+            cups_job_ids TEXT NOT NULL DEFAULT '',
+            source_device TEXT NOT NULL DEFAULT 'Página web',
+            source_page INTEGER,
+            error TEXT,
+            created_at TEXT NOT NULL,
+            started_at TEXT,
+            finished_at TEXT
+        );
+
+        INSERT INTO jobs (
+            id, printer_name, original_name, content_type, source_path,
+            fit_mode, orientation, copies, status, pages, cups_job_ids,
+            source_device, source_page, error, created_at, started_at, finished_at
+        )
+        SELECT
+            id, printer_name, original_name, content_type, source_path,
+            fit_mode, orientation, copies, status, pages, cups_job_ids,
+            source_device, NULL, error, created_at, started_at, finished_at
+        FROM jobs_old;
+
+        DROP TABLE jobs_old;
+
+        CREATE INDEX IF NOT EXISTS idx_jobs_status_created
+        ON jobs(status, created_at);
+        """
+    )
+
+
 def init_database(path: Path | None = None) -> None:
     db_path = path or settings.database_path
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -90,6 +146,10 @@ def init_database(path: Path | None = None) -> None:
                 "ALTER TABLE jobs ADD COLUMN source_device TEXT "
                 "NOT NULL DEFAULT 'Página web'"
             )
+        if _jobs_needs_fit_mode_rebuild(db):
+            _rebuild_jobs_table_for_trim_fit_mode(db)
+        elif "source_page" not in columns:
+            db.execute("ALTER TABLE jobs ADD COLUMN source_page INTEGER")
 
 
 @contextmanager

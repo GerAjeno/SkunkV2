@@ -15,6 +15,7 @@ def test_process_job_submits_each_copy_explicitly(monkeypatch) -> None:
         "fit_mode": "contain",
         "orientation": "auto",
         "copies": 5,
+        "source_page": None,
     }
 
     monkeypatch.setattr(

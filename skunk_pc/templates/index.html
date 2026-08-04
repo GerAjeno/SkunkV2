@@ -85,6 +85,7 @@
             <select name="fit_mode">
               <option value="contain">Completa, sin recortar</option>
               <option value="cover">Llenar etiqueta, puede recortar</option>
+              <option value="trim">Recortar al contenido</option>
             </select>
           </label>
           <label>
@@ -98,6 +99,11 @@
           <label>
             Copias
             <input name="copies" type="number" min="1" max="20" value="1">
+          </label>
+          <label>
+            Página (solo PDF)
+            <input name="page" type="number" min="1" placeholder="Todas">
+            <small class="muted">Vacío imprime todas las páginas del PDF.</small>
           </label>
         </div>
         <button id="print-submit" class="btn btn-primary btn-large" type="submit">

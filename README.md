@@ -66,9 +66,22 @@ Cada página es:
 
 1. Renderizada a 203 DPI.
 2. Rotada automáticamente cuando mejora el aprovechamiento.
-3. Ajustada dentro de 812×1218 o recortada para llenar, según la opción elegida.
+3. Ajustada dentro de 812×1218 según la opción de ajuste elegida:
+   - **Completa, sin recortar**: la página entera dentro de la etiqueta.
+   - **Llenar etiqueta, puede recortar**: escala para llenar el 4×6 y recorta el sobrante.
+   - **Recortar al contenido**: detecta el área con contenido real (ignora
+     márgenes casi blancos) y la ajusta a la etiqueta. Sirve para guías que
+     traen la etiqueta 4×6 incrustada en una hoja más grande, como algunas
+     etiquetas de Mercado Envíos que ubican la etiqueta en una esquina de
+     una hoja A4.
 4. Convertida a monocromo con dithering Floyd–Steinberg.
 5. Enviada a CUPS con tamaño `w288h432`, equivalente a 4×6 pulgadas.
+
+El formulario de impresión web acepta un número de **página** opcional para
+PDF de varias hojas: vacío imprime todas (por ejemplo, un PDF con varias
+etiquetas, una por página), y un número imprime solo esa página — útil
+cuando el PDF combina la etiqueta con un comprobante o manifiesto que no
+debe imprimirse como etiqueta.
 
 Los documentos de Office no están habilitados en esta primera versión. Se
 agregarán mediante una conversión aislada después de validar PDF e imágenes.

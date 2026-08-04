@@ -21,6 +21,7 @@ def create_job(
     orientation: str,
     copies: int,
     source_device: str = "Página web",
+    source_page: int | None = None,
 ) -> dict:
     job_id = str(uuid.uuid4())
     created_at = utc_now()
@@ -29,8 +30,9 @@ def create_job(
             """
             INSERT INTO jobs (
                 id, printer_name, original_name, content_type, source_path,
-                fit_mode, orientation, copies, status, created_at, source_device
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?)
+                fit_mode, orientation, copies, status, created_at, source_device,
+                source_page
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)
             """,
             (
                 job_id,
@@ -43,6 +45,7 @@ def create_job(
                 copies,
                 created_at,
                 source_device[:200],
+                source_page,
             ),
         )
         db.commit()

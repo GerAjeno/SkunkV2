@@ -410,6 +410,7 @@ async def api_create_job(
     fit_mode: str = Form("contain"),
     orientation: str = Form("auto"),
     copies: int = Form(1),
+    page: str = Form(default=""),
     document: UploadFile = File(...),
 ):
     require_csrf(request)
@@ -421,12 +422,20 @@ async def api_create_job(
         raise HTTPException(status_code=400, detail="La cola no corresponde a una Zebra")
     if not printer.connected:
         raise HTTPException(status_code=409, detail="La impresora está desconectada")
-    if fit_mode not in {"contain", "cover"}:
+    if fit_mode not in {"contain", "cover", "trim"}:
         raise HTTPException(status_code=400, detail="Ajuste inválido")
     if orientation not in {"auto", "portrait", "landscape"}:
         raise HTTPException(status_code=400, detail="Orientación inválida")
     if not 1 <= copies <= 20:
         raise HTTPException(status_code=400, detail="Copias inválidas")
+    page_number: int | None = None
+    if page.strip():
+        try:
+            page_number = int(page.strip())
+        except ValueError:
+            raise HTTPException(status_code=400, detail="El número de página no es válido")
+        if page_number < 1:
+            raise HTTPException(status_code=400, detail="El número de página debe ser 1 o mayor")
 
     source = await _save_upload(document)
     client_ip = request.client.host if request.client else "origen desconocido"
@@ -446,6 +455,7 @@ async def api_create_job(
             orientation=orientation,
             copies=copies,
             source_device=f"{device} · {client_ip}",
+            source_page=page_number,
         )
     except Exception:
         source.unlink(missing_ok=True)
