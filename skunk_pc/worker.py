@@ -67,10 +67,26 @@ def process_job(job: dict) -> None:
         )
         log.info("Trabajo %s enviado: %s", job["id"], ", ".join(cups_ids))
     except (ConversionError, CupsError, OSError) as exc:
-        finish_job(job["id"], status="failed", error=str(exc)[:1000])
+        # Si el trabajo tenía varias copias/páginas, algunas pueden haberse
+        # enviado a CUPS antes del fallo. Se conservan sus IDs para que el
+        # historial las siga asociando a este trabajo en vez de mostrarlas
+        # como impresiones nativas sin origen.
+        finish_job(
+            job["id"],
+            status="failed",
+            pages=len(cups_ids),
+            cups_job_ids=cups_ids,
+            error=str(exc)[:1000],
+        )
         log.error("Trabajo %s falló: %s", job["id"], exc)
     except Exception as exc:
-        finish_job(job["id"], status="failed", error="Error interno de conversión")
+        finish_job(
+            job["id"],
+            status="failed",
+            pages=len(cups_ids),
+            cups_job_ids=cups_ids,
+            error="Error interno de conversión",
+        )
         log.exception("Trabajo %s falló inesperadamente: %s", job["id"], exc)
     finally:
         remove_job_files(job)

@@ -30,6 +30,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
+from . import __version__
 from .auth import (
     LoginBodyLimitMiddleware,
     login_attempts,
@@ -76,7 +77,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="Skunk PC",
-    version="0.1.3",
+    version=__version__,
     docs_url=None,
     redoc_url=None,
     lifespan=lifespan,
